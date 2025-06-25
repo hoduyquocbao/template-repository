@@ -87,7 +87,7 @@ impl Sled {
     async fn get<E: Entity>(&self, id: &E::Key) -> Result<Option<E>, Error>
     where 
         E::Key: Debug + AsRef<[u8]> + Sync,
-        E: DeserializeOwned,
+        E::Key: DeserializeOwned,
     {
         // Thử lấy từ cache
         let key = id.as_ref().to_vec();

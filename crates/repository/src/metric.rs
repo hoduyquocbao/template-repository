@@ -26,6 +26,12 @@ pub struct Metric {
     fail: Arc<AtomicU64>,
 }
 
+impl Default for Metric {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Registry quản lý tất cả metrics
 /// Mục đích: Gom nhóm và quản lý nhiều metric theo tên thao tác
 #[derive(Clone)]
@@ -33,6 +39,12 @@ pub struct Registry {
     /// Map lưu trữ các metric, key là tên thao tác
     /// Thành tựu: Cho phép truy xuất metric theo tên thao tác một cách hiệu quả
     map: Arc<RwLock<HashMap<String, Metric>>>,
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Metric {

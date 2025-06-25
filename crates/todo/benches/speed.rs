@@ -4,8 +4,9 @@ use once_cell::sync::Lazy; // Sử dụng once_cell để khởi tạo runtime m
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, BatchSize, PlotConfiguration, AxisScale, Bencher};
 use repository::{self, Sled, Id, Error,  Storage}; 
 use tempfile::tempdir; 
-use todo::{Summary, Todo, Patch};
+use todo::{Summary, Todo};
 use tokio::runtime::{Runtime, Builder};
+use shared::{Patch, filter};
 
 
 // Tạo một Tokio runtime toàn cục để sử dụng trong các benchmark
@@ -18,7 +19,7 @@ static RT: Lazy<Runtime> = Lazy::new(|| {
 
 // Hàm tiện ích để lấy tham chiếu đến runtime
 fn rt() -> &'static Runtime {
-    &*RT
+    &RT
 }
 
 struct BenchStore {
@@ -29,7 +30,7 @@ struct BenchStore {
 
 /// Truy vấn và trả về các đối tượng Todo đầy đủ.
 fn fetch(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Todo>, Error> {
-    let query = todo::filter(status, None, limit);
+    let query = filter(status, None, limit);
     // Sử dụng rt() đã định nghĩa
     // Lời gọi store.store.query sẽ hoạt động sau khi import Storage
     let summaries: Vec<_> = rt().block_on(async { store.store.query::<Todo>(query).await })?
@@ -46,7 +47,7 @@ fn fetch(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Todo>, Er
 
 /// Truy vấn và chỉ trả về các bản tóm tắt (Summary).
 fn list(store: &BenchStore, done: bool, limit: usize) -> Result<Vec<Summary>, Error> {
-    let query = todo::filter(done, None, limit);
+    let query = filter(done, None, limit);
     // Sử dụng rt()
     // Lời gọi store.store.query sẽ hoạt động sau khi import Storage
     let results = rt().block_on(async { store.store.query::<Todo>(query).await })?;
@@ -64,7 +65,7 @@ fn prepare(count: usize) -> BenchStore {
         id: Id::new_v4(),
         text: format!("Công việc mẫu {}", i),
         done: i % 2 == 0,
-        created: todo::now() + i as u128,
+        created: repository::now(),
     });
 
     // Sử dụng rt()

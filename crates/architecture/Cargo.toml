@@ -10,6 +10,11 @@ thiserror = { workspace = true }
 repository = { path = "../repository" }
 async-trait = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+shared = { path = "../shared" }
 
 [dev-dependencies]
 criterion = { workspace = true }

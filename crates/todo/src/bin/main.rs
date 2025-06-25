@@ -4,7 +4,8 @@
 use clap::{Parser, Subcommand};
 use repository::{self, Sled, Id, Error, };
 use tracing::info;
-use todo::{Summary, Patch};
+use shared::Patch;
+use todo::Summary;
 
 /// Một ứng dụng todo hiệu năng cao, giới hạn bởi quy tắc đơn từ.
 #[derive(Parser)]
@@ -103,7 +104,7 @@ async fn main() -> Result<(), repository::Error> {
             // Xác định trạng thái cần truy vấn. Mặc định là 'pending' nếu không có cờ nào.
             let status = if done {
                 true
-            } else if pending || (!done && !pending) {
+            } else if pending || !done {
                 // mặc định là 'pending' nếu không có cờ nào được đặt
                 false
             } else {

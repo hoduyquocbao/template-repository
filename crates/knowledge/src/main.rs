@@ -1,0 +1,336 @@
+// main.rs
+// Binary crate là điểm vào trung tâm cho hệ thống tri thức.
+
+use clap::{Parser, Subcommand};
+use repository::{self, Sled, Id, Error};
+use tracing::info;
+
+// Import các submodule mới với tên đơn từ
+use knowledge::{architecture, memories, task, display};
+
+/// Hệ thống quản lý tri thức kiến trúc và phát triển.
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// Đường dẫn đến thư mục cơ sở dữ liệu Sled cho tất cả các bản ghi.
+    #[arg(short, long, default_value = "db")]
+    path: String,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Quản lý các bản ghi kiến trúc
+    Architecture {
+        #[command(subcommand)]
+        command: Architecture, // ĐÃ ĐỔI TÊN TỪ ArchCmd THÀNH Architecture
+    },
+    /// Quản lý các bản ghi bộ nhớ (quyết định, phân tích)
+    Memories {
+        #[command(subcommand)]
+        command: Memories, // ĐÃ ĐỔI TÊN TỪ MemCmd THÀNH Memories
+    },
+    /// Quản lý các bản ghi công việc (todo list)
+    Task {
+        #[command(subcommand)]
+        command: Task, // ĐÃ ĐỔI TÊN TỪ TaskCmd THÀNH Task
+    },
+    // Lệnh cho Director để khởi tạo các luồng nghiệp vụ (sẽ được implement sau)
+    // Direct {
+    //     #[command(subcommand)]
+    //     command: Direct, // ĐÃ ĐỔI TÊN TỪ DirectCmd THÀNH Direct
+    // }
+}
+
+// --- Lệnh con cho Architecture (Architecture) ---
+#[derive(Subcommand)]
+enum Architecture { // ĐÃ ĐỔI TÊN
+    /// Thêm hoặc cập nhật một bản ghi kiến trúc
+    Add {
+        #[arg(long)]
+        context: String,
+        #[arg(long)]
+        module: String,
+        #[arg(long)]
+        r#type: String, // 'type' là từ khóa, dùng r#type
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        responsibility: String,
+        #[arg(long)]
+        dependency: String,
+        #[arg(long)]
+        performance: String,
+        #[arg(long)]
+        naming: String,
+        #[arg(long)]
+        prompt: String,
+    },
+    /// Lấy một bản ghi kiến trúc bằng key tổng hợp
+    Get {
+        #[arg(long)]
+        context: String,
+        #[arg(long)]
+        module: String,
+        #[arg(long)]
+        r#type: String,
+        #[arg(long)]
+        name: String,
+    },
+    /// Xóa một bản ghi kiến trúc
+    Del {
+        #[arg(long)]
+        context: String,
+        #[arg(long)]
+        module: String,
+        #[arg(long)]
+        r#type: String,
+        #[arg(long)]
+        name: String,
+    },
+    /// Liệt kê các bản ghi kiến trúc
+    List {
+        /// Tiền tố để lọc (ví dụ: "System:Director")
+        #[arg(long, default_value = "")]
+        prefix: String,
+        /// Số lượng tối đa hiển thị
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+}
+
+// --- Lệnh con cho Memories (Memories) ---
+#[derive(Subcommand)]
+enum Memories { // ĐÃ ĐỔI TÊN
+    /// Thêm một bản ghi bộ nhớ mới
+    Add {
+        #[arg(long)]
+        r#type: String, // 'type' là từ khóa, dùng r#type
+        #[arg(long)]
+        context: String,
+        #[arg(long)]
+        module: String,
+        #[arg(long)]
+        subject: String,
+        #[arg(long)]
+        description: String,
+        #[arg(long)]
+        decision: String,
+        #[arg(long)]
+        rationale: String,
+    },
+    /// Lấy một bản ghi bộ nhớ bằng ID
+    Get {
+        #[arg(long)]
+        id: Id,
+    },
+    /// Liệt kê các bản ghi bộ nhớ
+    List {
+        /// Lọc theo loại (ví dụ: 'D' cho Decision, 'A' cho Analysis)
+        #[arg(long)]
+        r#type: Option<char>,
+        /// Số lượng tối đa hiển thị
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+}
+
+// --- Lệnh con cho Task (Todo) ---
+#[derive(Subcommand)]
+enum Task { // ĐÃ ĐỔI TÊN
+    /// Thêm một công việc mới
+    Add { text: String },
+    /// Lấy một công việc bằng ID
+    Get { id: Id },
+    /// Đánh dấu một công việc là đã hoàn thành
+    Done { id: Id },
+    /// Xóa một công việc
+    Del {
+        #[arg(long)]
+        id: Id,
+    },
+    /// Liệt kê các công việc với bộ lọc trạng thái
+    List {
+        /// Chỉ hiển thị các công việc đã hoàn thành
+        #[arg(long)]
+        done: bool,
+
+        /// Chỉ hiển thị các công việc đang chờ
+        #[arg(long, conflicts_with = "done")]
+        pending: bool,
+
+        /// Số lượng tối đa hiển thị
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+}
+
+#[tokio::main]
+async fn main() -> Result<(), repository::Error> {
+    tracing_subscriber::fmt::init();
+
+    info!("Đang khởi động ứng dụng knowledge");
+
+    let cli = Cli::parse();
+    let store = Sled::new(&cli.path)?;
+
+    match cli.command {
+        Commands::Architecture { command } => match command {
+            Architecture::Add {
+                context,
+                module,
+                r#type,
+                name,
+                responsibility,
+                dependency,
+                performance,
+                naming,
+                prompt,
+            } => {
+                info!(
+                    %context, %module, %r#type, %name, "Đang xử lý lệnh thêm/cập nhật bản ghi kiến trúc"
+                );
+                let entry = architecture::add(
+                    &store,
+                    architecture::Add {
+                        context,
+                        module,
+                        r#type,
+                        name,
+                        responsibility,
+                        dependency,
+                        performance,
+                        naming,
+                        prompt,
+                        created: repository::now(),
+                    },
+                ).await?;
+                println!("Đã thêm/cập nhật: [{}:{}:{}] {}", entry.context, entry.module, entry.r#type, entry.name);
+            }
+            Architecture::Get { // Cập nhật tên enum
+                context,
+                module,
+                r#type,
+                name,
+            } => {
+                let key = format!("{}:{}:{}:{}", context, module, r#type, name);
+                match architecture::get(&store, context, module, r#type, name).await? {
+                    Some(entry) => {
+                        println!("Context: {}", entry.context);
+                        println!("Module: {}", entry.module);
+                        println!("Type: {}", entry.r#type);
+                        println!("Name: {}", entry.name);
+                        println!("Responsibility: {}", entry.responsibility);
+                        println!("Dependency: {}", entry.dependency);
+                        println!("Performance: {}", entry.performance);
+                        println!("Naming: {}", entry.naming);
+                        println!("Prompt: {}", entry.prompt);
+                        println!("Created: {}", entry.created);
+                    }
+                    None => {
+                        println!("Không tìm thấy kiến trúc với key: {}", key);
+                    }
+                }
+            }
+            Architecture::Del { // Cập nhật tên enum
+                context,
+                module,
+                r#type,
+                name,
+            } => {
+                let key = format!("{}:{}:{}:{}", context, module, r#type, name);
+                match architecture::del(&store, context, module, r#type, name).await {
+                    Ok(entry) => println!(
+                        "Đã xóa kiến trúc: [{}:{}:{}] {}",
+                        entry.context, entry.module, entry.r#type, entry.name
+                    ),
+                    Err(Error::Missing) => println!("Không tìm thấy kiến trúc để xóa: {}", key),
+                    Err(e) => return Err(e),
+                }
+            }
+            Architecture::List { prefix, limit } => { // Cập nhật tên enum
+                let result = architecture::list(&store, prefix, limit).await?;
+                display::show(result)?;
+            }
+        },
+        Commands::Memories { command } => match command {
+            Memories::Add {
+                r#type,
+                context,
+                module,
+                subject,
+                description,
+                decision,
+                rationale,
+            } => {
+                let entry = memories::add(
+                    &store,
+                    memories::Add {
+                        r#type,
+                        context,
+                        module,
+                        subject,
+                        description,
+                        decision,
+                        rationale,
+                        created: repository::now(),
+                    },
+                ).await?;
+                println!("Đã thêm bộ nhớ: [{}] [{}]: {}", entry.id, entry.r#type, entry.subject);
+            }
+            Memories::Get { id } => { // Cập nhật tên enum
+                match memories::get(&store, id).await? {
+                    Some(entry) => {
+                        println!("ID: {}", entry.id);
+                        println!("Type: {}", entry.r#type);
+                        println!("Context: {}", entry.context);
+                        println!("Module: {}", entry.module);
+                        println!("Subject: {}", entry.subject);
+                        println!("Description: {}", entry.description);
+                        println!("Decision: {}", entry.decision);
+                        println!("Rationale: {}", entry.rationale);
+                        println!("Created: {}", entry.created);
+                    }
+                    None => {
+                        println!("Không tìm thấy bộ nhớ với ID: {}", id);
+                    }
+                }
+            }
+            Memories::List { r#type, limit } => { // Cập nhật tên enum
+                let result = memories::list(&store, r#type, limit).await?;
+                display::show(result)?;
+            }
+        },
+        Commands::Task { command } => match command {
+            Task::Add { text } => { // Cập nhật tên enum
+                let task = task::add(&store, text).await?;
+                println!("Đã thêm công việc: [{}], {}", task.id, task.text);
+            }
+            Task::Get { id } => { // Cập nhật tên enum
+                let task = task::get(&store, id).await?;
+                let status = if task.done { "hoàn thành" } else { "đang chờ" };
+                println!("[{}] {} ({})", task.id, task.text, status);
+            }
+            Task::Done { id } => { // Cập nhật tên enum
+                let task = task::done(&store, id).await?;
+                println!("Đã hoàn thành công việc: [{}], {}", task.id, task.text);
+            }
+            Task::Del { id } => { // Cập nhật tên enum
+                let task = task::del(&store, id).await?;
+                println!("Đã xóa công việc: [{}], {}", task.id, task.text);
+            }
+            Task::List { done, pending, limit } => { // Cập nhật tên enum
+                let result = task::list(&store, done, pending, limit).await?;
+                display::show(result)?;
+            }
+        },
+        // Commands::Direct { command } => {
+        //     // Logic cho Director sẽ được thêm vào đây
+        // }
+    }
+
+    info!("Ứng dụng knowledge hoàn thành thành công");
+    Ok(())
+}

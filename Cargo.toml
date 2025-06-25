@@ -3,7 +3,9 @@ members = [
     "crates/repository",
     "crates/todo",
     "crates/architecture", 
-    "crates/memories"     
+    "crates/memories",
+    "crates/knowledge",
+    "crates/shared"
 ]
 
 resolver = "2"

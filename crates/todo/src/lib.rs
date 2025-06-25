@@ -5,8 +5,10 @@
 //! thuận lợi cho việc thao tác với các đối tượng Todo.
 
 use serde::{Deserialize, Serialize};
-use repository::{Storage, Id, Error, Entity, Query, Key};
-use std::time::{SystemTime, UNIX_EPOCH};
+use repository::{Storage, Id, Error, Entity, Key, now};
+use shared::Showable;
+use shared::{Patch, filter};
+// use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, instrument, debug, warn};
 
 /// Đại diện cho một công việc duy nhất với timestamp.
@@ -27,19 +29,6 @@ pub struct Todo {
     /// Unix timestamp (nanoseconds) của thời điểm tạo.
     /// Được sử dụng để sắp xếp và tạo chỉ mục.
     pub created: u128,
-}
-
-/// Một bản tóm tắt của `Todo` để hiển thị trong danh sách.
-/// 
-/// Được lưu trữ trong cây chỉ mục để tạo thành một "covering index" (chỉ mục bao phủ),
-/// giúp tối ưu hóa các truy vấn danh sách mà không cần truy cập dữ liệu chính.
-#[derive(Serialize, Deserialize, Debug,  PartialEq, Eq)]
-pub struct Summary {
-    /// ID duy nhất của công việc, dùng để tham chiếu đến dữ liệu đầy đủ
-    pub id: Id,
-    
-    /// Nội dung mô tả của công việc
-    pub text: String,
 }
 
 /// Triển khai Entity trait cho Todo
@@ -71,47 +60,24 @@ impl Entity for Todo {
     }
 }
 
-/// Đại diện cho một bản vá (thay đổi một phần) cho một `Todo`.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct Patch {
-    /// Nội dung mới của công việc, nếu cần cập nhật
-    pub text: Option<String>,
-    
-    /// Trạng thái mới của công việc, nếu cần cập nhật
-    pub done: Option<bool>,
-}
-
-/// Thay đổi: `status_query` thành `filter` để thể hiện mục đích (lọc theo trạng thái)
-/// và tuân thủ quy tắc một từ.
-/// Hàm tiện ích để tạo truy vấn cho công việc có trạng thái cụ thể.
-pub fn filter(done: bool, after: Option<(u128, Id)>, limit: usize) -> Query<Vec<u8>> {
-    let prefix = vec![if done { 1 } else { 0 }];
-    
-    let after = after.map(|(created, id)| {
-        // Cập nhật để sử dụng Key builder mới
-        let mut key = Key::reserve(33);  // Sử dụng 'reserve' thay cho 'with_capacity'
-        key.flag(done);                  // Sử dụng 'flag' thay cho 'add_bool'
-        key.time(created);               // Sử dụng 'time' thay cho 'add_rev_time'
-        key.id(id);                      // Sử dụng 'id' thay cho 'add_id'
-        key.clone().build()
-    });
-    
-    Query {
-        prefix,
-        after,
-        limit,
-    }
-}
-
-/// Lấy thời gian hiện tại dưới dạng Unix timestamp nano giây.
+/// Một bản tóm tắt của `Todo` để hiển thị trong danh sách.
 /// 
-/// Hàm này được sử dụng để tạo timestamp cho các công việc mới.
-/// Nó trả về số nano giây kể từ Unix epoch (1970-01-01 00:00:00 UTC).
-pub fn now() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos()
+/// Được lưu trữ trong cây chỉ mục để tạo thành một "covering index" (chỉ mục bao phủ),
+/// giúp tối ưu hóa các truy vấn danh sách mà không cần truy cập dữ liệu chính.
+#[derive(Serialize, Deserialize, Debug,  PartialEq, Eq)]
+pub struct Summary {
+    /// ID duy nhất của công việc, dùng để tham chiếu đến dữ liệu đầy đủ
+    pub id: Id,
+    
+    /// Nội dung mô tả của công việc
+    pub text: String,
+}
+
+// Triển khai Showable cho Summary của todo
+impl Showable for Summary {
+    fn show(&self) {
+        println!("[{}] {}", self.id, self.text);
+    }
 }
 
 /// Thêm một công việc mới vào hệ thống lưu trữ.

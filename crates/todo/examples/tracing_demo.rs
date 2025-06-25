@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
     debug!(count = todos.len(), "Truy xuất công việc thành công");
 
     // Đánh dấu một công việc là hoàn thành
-    let patch = todo::Patch {
+    let patch = shared::Patch {
         text: None,
         done: Some(true),
     };

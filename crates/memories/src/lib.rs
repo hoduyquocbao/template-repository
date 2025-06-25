@@ -2,7 +2,8 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Id, Query, Storage, Error, Key};
+use repository::{Entity, Id, Storage, Error, Key};
+use shared::{Showable, Filterable};
 
 /// Đại diện cho một bản ghi bộ nhớ.
 /// Đây là một `Entity` có thể được lưu trữ và truy vấn thông qua `repository`.
@@ -19,14 +20,6 @@ pub struct Entry {
     pub created: u128,        // Timestamp tạo (thay vì String để dễ index)
 }
 
-/// Một bản tóm tắt của `Entry` để hiển thị trong danh sách.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Summary {
-    pub id: Id,
-    pub r#type: String,
-    pub subject: String,
-    pub created: u128,
-}
 
 impl Entity for Entry {
     const NAME: &'static str = "memories"; // Tên tree trong Sled
@@ -57,7 +50,42 @@ impl Entity for Entry {
     }
 }
 
+impl Filterable for Entry {
+    type Prefix = Vec<u8>;
+    type After = Vec<u8>;
+    fn prefix(&self) -> Self::Prefix {
+        let mut key = Key::reserve(16 + 1 + 16);
+        key.time(self.created);
+        key.byte(self.r#type.as_bytes()[0]);
+        key.id(self.id);
+        key.build()
+    }
+    fn after(&self) -> Option<Self::After> {
+        None
+    }
+}
+
+/// Một bản tóm tắt của `Entry` để hiển thị trong danh sách.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Summary {
+    pub id: Id,
+    pub r#type: String,
+    pub subject: String,
+    pub created: u128,
+}
+
+// Triển khai Showable cho Summary của memories
+impl Showable for Summary {
+    fn show(&self) {
+        println!(
+            "[{}] [{}]: {}",
+            self.id, self.r#type, self.subject
+        );
+    }
+}
+
 /// Tạo và thêm một bản ghi bộ nhớ mới.
+#[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
     r#type: String,
@@ -106,26 +134,17 @@ pub async fn remove<S: Storage>(store: &S, id: Id) -> Result<Entry, Error> {
 }
 
 /// Truy vấn các bản ghi bộ nhớ.
-pub async fn query<S: Storage>(store: &S, _type_prefix: Option<char>, after: Option<(u128, Id)>, limit: usize)
+pub async fn query<S: Storage>(store: &S, _type: Option<char>, after: Option<(u128, Id)>, limit: usize)
     -> Result<Box<dyn Iterator<Item = Result<Summary, Error>> + Send>, Error>
 {
-    // Sửa lỗi: Hàm query không thể lọc theo `type` một cách hiệu quả nữa
-    // vì nó không còn là byte đầu tiên. Tạm thời bỏ qua `type_prefix`
-    // để sửa lỗi sắp xếp chính.
-    let prefix_bytes = Vec::new();
-
+    let prefix = Vec::new();
     let after_bytes = after.map(|(created, id)| {
         let mut key = Key::reserve(16 + 1 + 16);
         key.time(created);
-        // `type` của bản ghi "after" không được biết ở đây.
-        // Đây là một hạn chế của thiết kế hiện tại. Để đơn giản,
-        // chúng ta sẽ chỉ dùng time + id để phân trang.
-        // Một giải pháp tốt hơn sẽ yêu cầu thay đổi lớn hơn.
         key.id(id);
         key.build()
     });
-
-    let query_obj = Query { prefix: prefix_bytes, after: after_bytes, limit };
+    let query_obj = shared::query(prefix, after_bytes, limit);
     store.query::<Entry>(query_obj).await
 }
 

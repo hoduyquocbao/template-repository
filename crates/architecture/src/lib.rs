@@ -2,7 +2,8 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Query, Storage, Error, Key, now};
+use repository::{Entity, Storage, Error, Key, now};
+use shared::{Showable, Filterable};
 
 /// Đại diện cho một bản ghi kiến trúc.
 /// Đây là một `Entity` có thể được lưu trữ và truy vấn thông qua `repository`.
@@ -20,15 +21,6 @@ pub struct Entry {
     pub created: u128,        // Timestamp tạo
 }
 
-/// Một bản tóm tắt của `Entry` để hiển thị trong danh sách.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Summary {
-    pub context: String,
-    pub module: String,
-    pub name: String,
-    pub r#type: String,
-}
-
 impl Entity for Entry {
     const NAME: &'static str = "architecture"; // Tên tree trong Sled
     type Key = String; // Key duy nhất là sự kết hợp của các trường
@@ -42,7 +34,7 @@ impl Entity for Entry {
 
     fn index(&self) -> Self::Index {
         // Sử dụng Key builder để tạo index cho truy vấn hiệu quả
-        let mut key = Key::reserve(self.key().len() + 16);
+        let mut key = Key::reserve(Entity::key(self).len() + 16);
         key.byte(1); // Flag cho bản ghi sống (không bị xóa logic)
         key.time(self.created); // Sắp xếp theo thời gian tạo (mới nhất trước)
         key.byte(self.r#type.as_bytes()[0]); // Ví dụ: index theo loại
@@ -59,9 +51,43 @@ impl Entity for Entry {
     }
 }
 
+impl Filterable for Entry {
+    type Prefix = Vec<u8>;
+    type After = Vec<u8>;
+    fn prefix(&self) -> Self::Prefix {
+        let mut key = Key::reserve(Entity::key(self).len() + 16);
+        key.byte(1);
+        key.time(self.created);
+        key.byte(self.r#type.as_bytes()[0]);
+        key.build()
+    }
+    fn after(&self) -> Option<Self::After> {
+        None
+    }
+}
+
+/// Một bản tóm tắt của `Entry` để hiển thị trong danh sách.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Summary {
+    pub context: String,
+    pub module: String,
+    pub name: String,
+    pub r#type: String,
+}
+
+// Triển khai Showable cho Summary của architecture
+impl Showable for Summary {
+    fn show(&self) {
+        println!(
+            "[{}:{}:{}] {}",
+            self.context, self.module, self.r#type, self.name
+        );
+    }
+}
+
 /// Thêm một bản ghi kiến trúc mới. Nếu key đã tồn tại, nó sẽ cập nhật (upsert).
 pub async fn add<S: Storage>(store: &S, new_entry: Entry) -> Result<Entry, Error> {
-    let key = new_entry.key();
+    let key = Entity::key(&new_entry);
     // Sửa lỗi move: Clone `new_entry` để `update_data` được move vào closure,
     // trong khi `new_entry` gốc vẫn có thể được sử dụng sau đó.
     let update_data = new_entry.clone();
@@ -114,7 +140,7 @@ pub async fn remove<S: Storage>(store: &S, key: String) -> Result<Entry, Error> 
 pub async fn query<S: Storage>(store: &S, prefix: Vec<u8>, after: Option<Vec<u8>>, limit: usize)
     -> Result<Box<dyn Iterator<Item = Result<Summary, Error>> + Send>, Error>
 {
-    let query_obj = Query { prefix, after, limit };
+    let query_obj = shared::query(prefix, after, limit);
     store.query::<Entry>(query_obj).await
 }
 
