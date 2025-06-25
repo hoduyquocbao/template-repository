@@ -1,0 +1,62 @@
+
+running 3 tests
+test entity::tests::build ... ignored
+test sled::tests::bulk ... ignored
+test sled::tests::crud ... ignored
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test tests::bulk ... ignored
+test tests::concurrency ... ignored
+test tests::failure ... ignored
+test tests::index ... ignored
+test tests::insertion ... ignored
+test tests::paging ... ignored
+test tests::removal ... ignored
+test tests::retrieval ... ignored
+test tests::stress ... ignored
+test tests::transaction ... ignored
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+CRUD/add/10             time:   [78.835 µs 80.340 µs 82.513 µs]
+                        change: [+0.1933% +3.0255% +5.9176%] (p = 0.04 < 0.05)
+                        Change within noise threshold.
+Found 11 outliers among 100 measurements (11.00%)
+  1 (1.00%) low mild
+  5 (5.00%) high mild
+  5 (5.00%) high severe
+CRUD/find/10            time:   [23.906 µs 24.071 µs 24.282 µs]
+                        change: [-3.9239% -1.2163% +0.9119%] (p = 0.37 > 0.05)
+                        No change in performance detected.
+Found 15 outliers among 100 measurements (15.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  10 (10.00%) high severe
+CRUD/change/10          time:   [40.648 µs 41.362 µs 42.171 µs]
+                        change: [-7.5853% -5.6561% -3.6743%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 9 outliers among 100 measurements (9.00%)
+  6 (6.00%) high mild
+  3 (3.00%) high severe
+CRUD/query_summary/10   time:   [42.349 µs 42.841 µs 43.415 µs]
+                        change: [-9.1509% -7.8705% -6.3372%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 12 outliers among 100 measurements (12.00%)
+  3 (3.00%) low mild
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+CRUD/query_full/10      time:   [285.04 µs 287.22 µs 290.06 µs]
+                        change: [-2.9409% -0.4372% +2.5647%] (p = 0.76 > 0.05)
+                        No change in performance detected.
+Found 17 outliers among 100 measurements (17.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  12 (12.00%) high severe

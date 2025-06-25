@@ -2,8 +2,9 @@
 // Binary crate với CLI để tương tác với thư viện.
 
 use clap::{Parser, Subcommand};
-use bedrock::{self, Sled, Id, Patch, Error, todo::{self, Summary}};
+use bedrock::{self, Sled, Id, Error, };
 use tracing::info;
+use todo::{Summary, Patch};
 
 /// Một ứng dụng todo hiệu năng cao, giới hạn bởi quy tắc đơn từ.
 #[derive(Parser)]

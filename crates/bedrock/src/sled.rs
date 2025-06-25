@@ -8,24 +8,27 @@
 //! 2. Thực hiện các thao tác cập nhật trong các giao dịch đảm bảo tính toàn vẹn dữ liệu
 //! 3. Xử lý bất đồng bộ thông qua tokio để đạt được khả năng mở rộng đồng thời cao
 
-use crate::{Error, entity::{Entity, Query}};
-use crate::storage::Storage;
-use crate::pool::Pool;
-use crate::cache::Cache;
-use crate::metric::{Registry, Metric};
-use sled::{Db, Tree, Transactional, transaction::ConflictableTransactionError};
-use tokio::task::spawn_blocking;
-use tracing::{debug, instrument, trace, warn};
-use std::time::{Duration, Instant};
-use std::future::Future;
-use serde::de::DeserializeOwned;
-use std::fmt::Debug;
-use async_trait::async_trait;
+// ---
+// Import các module, trait, struct cần thiết cho lưu trữ, đồng bộ hóa, cache, metric, tracing, v.v.
+use crate::{Error, entity::{Entity, Query}}; // Định nghĩa lỗi, trait Entity, struct Query
+use crate::storage::Storage; // Trait Storage trừu tượng
+use crate::pool::Pool; // Pool kết nối
+use crate::cache::Cache; // Cache thực thể
+use crate::metric::{Registry, Metric}; // Thu thập và quản lý metric
+use sled::{Db, Tree, Transactional, transaction::ConflictableTransactionError}; // Sled: DB, Tree, Transaction
+use tokio::task::spawn_blocking; // Chạy blocking code trong môi trường async
+use tracing::{debug, instrument, trace, warn}; // Tracing: log, span, debug
+use std::time::{Duration, Instant}; // Quản lý thời gian, TTL, đo thời gian thực thi
+use std::future::Future; // Trait cho async
+use serde::de::DeserializeOwned; // Trait cho deserialize động
+use std::fmt::Debug; // Debug cho key/index
+use async_trait::async_trait; // Trait async cho Storage
 
 // Kích thước khối cho xử lý hàng loạt
 const CHUNK: usize = 1000;
 
 /// Wrapper xung quanh `sled::Db` với các tính năng nâng cao
+/// Mục đích: Gom nhóm các thành phần (db, pool, cache, metric) để tối ưu hóa hiệu năng và khả năng mở rộng
 #[derive(Clone)]
 pub struct Sled {
     /// Cơ sở dữ liệu Sled gốc
@@ -43,13 +46,14 @@ pub struct Sled {
 
 impl Sled {
     /// Tạo instance Sled mới với các tính năng nâng cao
+    /// Mục đích: Khởi tạo db, pool, cache, metric cho một path cụ thể
     pub fn new(path: &str) -> Result<Self, Error> {
         let db = sled::Config::new()
             .path(path)
             .temporary(path.is_empty())
             .open()?;
             
-        let pool = Pool::new(10, || Ok(db.clone()))?;
+        let pool = Pool::new(10, || Ok(db.clone()))?; // Pool 10 kết nối
         let cache = Cache::new(Duration::from_secs(300)); // 5 phút TTL
         let metric = Registry::new();
         
@@ -57,12 +61,14 @@ impl Sled {
     }
     
     /// Lấy metric cho một thao tác
+    /// Mục đích: Hỗ trợ đo lường hiệu năng từng thao tác
     #[allow(dead_code)]
     async fn metric(&self, name: &str) -> Metric {
         self.metric.get(name).await
     }
     
     /// Thực hiện thao tác với metric
+    /// Mục đích: Đo thời gian thực thi và ghi nhận thành công/thất bại
     #[allow(dead_code)]
     async fn with_metric<F, T>(&self, name: &str, f: F) -> Result<T, Error>
     where
@@ -76,6 +82,7 @@ impl Sled {
     }
     
     /// Lấy dữ liệu từ cache hoặc storage
+    /// Mục đích: Tăng tốc truy xuất thực thể, giảm tải backend
     #[allow(dead_code)]
     async fn get<E: Entity>(&self, id: &E::Key) -> Result<Option<E>, Error>
     where 
@@ -103,16 +110,21 @@ impl Sled {
     }
     
     /// Lấy (hoặc tạo) cây dữ liệu chính cho một loại thực thể.
+    /// Mục đích: Đảm bảo mỗi loại thực thể có một tree riêng biệt trong sled
     fn data<E: Entity>(&self) -> Result<Tree, Error> {
         Ok(self.db.open_tree(E::NAME)?)
     }
     
     /// Lấy (hoặc tạo) cây chỉ mục cho một loại thực thể.
+    /// Mục đích: Tối ưu hóa truy vấn danh sách qua chỉ mục bao phủ
     fn index<E: Entity>(&self) -> Result<Tree, Error> {
         Ok(self.db.open_tree(format!("index_{}", E::NAME))?)
     }
     
     #[instrument(skip(self, entity), fields(r#type = std::any::type_name::<E>()))]
+    /// Chèn một thực thể vào storage và index
+    /// Thuật toán: Transaction lưu đồng thời vào data tree và index tree
+    /// Thành tựu: Đảm bảo tính toàn vẹn và nhất quán giữa data và index
     fn insert<E: Entity>(&self, entity: &E) -> Result<(), Error> 
     where E::Key: Debug, E::Index: Debug
     {
@@ -150,6 +162,8 @@ impl Sled {
     }
     
     #[instrument(skip(self), fields(r#type = std::any::type_name::<E>()))]
+    /// Truy xuất một thực thể theo key
+    /// Thuật toán: Lấy từ data tree, giải tuần tự hóa
     fn fetch<E: Entity>(&self, key: &E::Key) -> Result<Option<E>, Error> 
     where E::Key: Debug
     {
@@ -172,6 +186,9 @@ impl Sled {
     }
     
     #[instrument(skip(self, transform), fields(r#type = std::any::type_name::<E>()))]
+    /// Cập nhật một thực thể theo transform function
+    /// Thuật toán: Transaction đọc, transform, ghi lại cả data và index nếu cần
+    /// Thành tựu: Đảm bảo atomicity và nhất quán index
     fn update<E: Entity, F>(&self, key: &E::Key, transform: F) -> Result<E, Error>
     where
         F: FnOnce(E) -> E,
@@ -229,6 +246,8 @@ impl Sled {
     
     /// Xóa một thực thể dựa trên khóa của nó, trả về thực thể đã bị xóa nếu thành công.
     #[instrument(skip(self), fields(r#type = std::any::type_name::<E>()))]
+    /// Thuật toán: Transaction xóa đồng thời khỏi data tree và index tree
+    /// Thành tựu: Đảm bảo không còn rò rỉ index, trả về entity đã xóa
     fn delete<E: Entity>(&self, key: &E::Key) -> Result<E, Error>
     where E::Key: Debug, E::Index: Debug
     {
@@ -273,6 +292,8 @@ impl Sled {
     /// Phương thức này tận dụng chỉ mục bao phủ để trả về một Stream các bản tóm tắt thực thể
     /// mà không cần truy cập vào dữ liệu đầy đủ, làm tăng hiệu suất đáng kể.
     #[instrument(skip(self, query), fields(r#type = std::any::type_name::<E>()))]
+    /// Thuật toán: Duyệt index tree, giải mã summary, hỗ trợ phân trang, giới hạn
+    /// Thành tựu: Truy vấn danh sách hiệu quả, không cần giải mã toàn bộ entity
     fn query<E: Entity>(&self, query: Query<E::Index>) -> Result<impl Iterator<Item=Result<E::Summary, Error>>, Error>
     where E::Key: Debug, E::Index: Debug
     {
@@ -324,6 +345,8 @@ impl Sled {
     
     /// Chèn nhiều thực thể cùng một lúc.
     #[instrument(skip(self, iterator), fields(r#type = std::any::type_name::<E>()))]
+    /// Thuật toán: Chia nhỏ iterator thành các chunk, chèn tuần tự từng chunk
+    /// Thành tựu: Đảm bảo hiệu năng và an toàn bộ nhớ khi chèn số lượng lớn
     fn mass<E>(&self, mut iterator: Box<dyn Iterator<Item=E> + Send>) -> Result<(), Error>
     where 
         E: Entity,
@@ -508,8 +531,8 @@ impl Storage for Sled {
 }
 
 mod tests {
-    use super::*;
-    use crate::Id;
+    // use super::*;
+    use crate::{Entity, Id, Sled};
     use serde::{Serialize, Deserialize};
     
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -593,7 +616,7 @@ mod tests {
         // Chèn hàng loạt sử dụng phương thức async
         rt.block_on(async {
             // Sử dụng phiên bản async của mass từ trait Storage
-            <Sled as Storage>::mass(&store, Box::new(things.clone().into_iter())).await.unwrap();
+            <Sled as crate::Storage>::mass(&store, Box::new(things.clone().into_iter())).await.unwrap();
         });
         
         // Kiểm tra tất cả đã được chèn
@@ -603,7 +626,7 @@ mod tests {
         }
         
         // Kiểm tra truy vấn 
-        let query: Query<Vec<u8>> = Query {
+        let query: crate::Query<Vec<u8>> = crate::Query {
             prefix: vec![],
             after: None,
             limit: 1000,
@@ -618,7 +641,7 @@ mod tests {
         let result = rt.block_on(async {
             // Tạo một query mới để không sử dụng lại query đã tiêu thụ
             // Thay đổi: query -> _query (để đánh dấu là không sử dụng)
-            let _query: Query<Vec<u8>> = Query {
+            let _query: crate::Query<Vec<u8>> = crate::Query {
                 prefix: vec![],
                 after: None,
                 limit: 1000,
@@ -626,7 +649,7 @@ mod tests {
             
             // Gọi phiên bản async từ trait Storage
             // Sử dụng query đã được truyền vào hàm bulk, không phải _query mới tạo
-            let outcome = <Sled as Storage>::query::<Thing>(store, query).await.unwrap(); // Sửa ở đây, dùng query từ tham số
+            let outcome = <Sled as crate::Storage>::query::<Thing>(store, query).await.unwrap(); // Sửa ở đây, dùng query từ tham số
             
             // Debug: Liệt kê từng kết quả và đếm
             let mut count = 0;

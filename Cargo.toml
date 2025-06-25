@@ -1,11 +1,9 @@
-[package]
-name = "bedrock"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["crates/bedrock", "crates/todo"] 
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 # Lưu trữ K-V nhúng hiệu năng cao
 sled = "0.34"
 # Serialization/Deserialization hiệu quả
@@ -24,23 +22,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = "1.21.3"
 # Lock-free synchronization primitives
 parking_lot = "0.12"
-
-[dev-dependencies]
-# Thư viện benchmark
-criterion = "0.4"
-# Tạo dữ liệu tạm thời
-tempfile = "3.5"
-# Thêm rand để tạo dữ liệu ngẫu nhiên
-rand = "0.8"
-
-# Kích hoạt feature 'testing' khi chạy benchmark
-[[bench]]
-name = "speed"
-harness = false
-
-[features]
-# Feature này dùng để expose các hàm chỉ dành cho test/benchmark
-testing = []
 
 # Tối ưu hóa các bản build phát hành để đạt hiệu năng tối đa
 [profile.release]

@@ -2,9 +2,9 @@
 
 use once_cell::sync::Lazy; // Sử dụng once_cell để khởi tạo runtime một lần
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, BatchSize, PlotConfiguration, AxisScale, Bencher};
-use bedrock::{self, Sled, Id, Error, todo::{self, Summary, Todo}, Patch, Storage}; 
+use bedrock::{self, Sled, Id, Error,  Storage}; 
 use tempfile::tempdir; 
-
+use todo::{Summary, Todo, Patch};
 use tokio::runtime::{Runtime, Builder};
 
 
@@ -38,7 +38,7 @@ fn fetch(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Todo>, Er
     let mut todos = Vec::with_capacity(summaries.len());
     for summary in summaries {
         // Sử dụng rt()
-        let todo = rt().block_on(async { bedrock::todo::find(&store.store, summary.id).await })?;
+        let todo = rt().block_on(async { todo::find(&store.store, summary.id).await })?;
         todos.push(todo);
     }
     Ok(todos)
@@ -69,7 +69,7 @@ fn prepare(count: usize) -> BenchStore {
 
     // Sử dụng rt()
     rt().block_on(async {
-        bedrock::todo::bulk(&store, todos).await.unwrap();
+        todo::bulk(&store, todos).await.unwrap();
     });
     
     BenchStore { store, _dir: dir } // _dir để giữ tempdir
@@ -83,7 +83,7 @@ fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>
         // Sửa cách gọi benchmark bất đồng bộ
         b.iter_batched(
             || format!("Công việc benchmark {}", rand::random::<u32>()),
-            |text| rt().block_on(bedrock::todo::add(&store.store, text)),
+            |text| rt().block_on(todo::add(&store.store, text)),
             BatchSize::SmallInput,
         );
     });
@@ -102,7 +102,7 @@ fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>
             } else {
                 // Sử dụng rt()
                 // Thay đổi: temp_todo -> todo
-                let todo = rt().block_on(bedrock::todo::add(&store.store, "temp".to_string())).unwrap();
+                let todo = rt().block_on(todo::add(&store.store, "temp".to_string())).unwrap();
                 // Thay đổi: temp_todo -> todo
                 todo.id
             }
@@ -111,14 +111,14 @@ fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>
         group.bench_function(BenchmarkId::new("find", size), |b: &mut Bencher| {
             // Sửa cách gọi benchmark bất đồng bộ
             // Thay đổi: id_to_use -> id
-            b.iter(|| rt().block_on(bedrock::todo::find(&store.store, id)));
+            b.iter(|| rt().block_on(todo::find(&store.store, id)));
         });
 
         group.bench_function(BenchmarkId::new("change", size), |b: &mut Bencher| {
             // Sửa cách gọi benchmark bất đồng bộ
             let patch = Patch { text: Some("đã cập nhật".to_string()), done: Some(true) }; // Patch đã được import
             // Thay đổi: id_to_use -> id
-            b.iter(|| rt().block_on(bedrock::todo::change(&store.store, id, patch.clone())));
+            b.iter(|| rt().block_on(todo::change(&store.store, id, patch.clone())));
         });
     }
 
@@ -220,7 +220,7 @@ fn scale(c: &mut Criterion) {
             // Sửa cách gọi benchmark bất đồng bộ
             b.iter_batched(
                 || format!("Công việc benchmark {}", rand::random::<u32>()),
-                |text| rt().block_on(bedrock::todo::add(&store.store, text)),
+                |text| rt().block_on(todo::add(&store.store, text)),
                 BatchSize::SmallInput,
             );
         });
@@ -235,7 +235,7 @@ fn scale(c: &mut Criterion) {
 
             group.bench_with_input(BenchmarkId::new("find_scale", size_val), &id, |b: &mut Bencher, &local_id| { // đổi tên id ở đây để tránh xung đột với id bên ngoài nếu có
                 // Sửa cách gọi benchmark bất đồng bộ
-                b.iter(|| rt().block_on(bedrock::todo::find(&store.store, local_id)));
+                b.iter(|| rt().block_on(todo::find(&store.store, local_id)));
             });
         }
 

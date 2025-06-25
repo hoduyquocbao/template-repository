@@ -1,0 +1,30 @@
+[package]
+name = "todo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sled = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+uuid = { workspace = true }
+clap = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+
+bedrock  = {path = "../bedrock"}
+
+[dev-dependencies]
+criterion = "0.4"
+tempfile = "3.5" 
+rand = "0.8"
+
+# Kích hoạt feature 'testing' khi chạy benchmark
+[[bench]]
+name = "speed"
+harness = false

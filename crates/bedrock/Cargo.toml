@@ -1,0 +1,26 @@
+[package]
+name = "bedrock"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sled = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+uuid = { workspace = true }
+clap = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+
+
+
+[features]
+# Feature này dùng để expose các hàm chỉ dành cho test/benchmark
+testing = []

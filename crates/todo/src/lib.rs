@@ -5,7 +5,7 @@
 //! thuận lợi cho việc thao tác với các đối tượng Todo.
 
 use serde::{Deserialize, Serialize};
-use crate::{storage::Storage, Id, Error, entity::{Entity, Query, Key}};
+use bedrock::{Storage, Id, Error, Entity, Query, Key};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, instrument, debug, warn};
 
@@ -311,7 +311,7 @@ pub async fn bulk<S: Storage>(store: &S, iter: impl Iterator<Item = Todo> + Send
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sled::Sled;
+    use bedrock::sled::Sled;
     use tokio::runtime::Runtime;
 
     fn memory() -> Sled {

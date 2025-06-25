@@ -33,39 +33,39 @@ async fn main() -> Result<(), Error> {
     let _guard = span.enter();
 
     // Thêm một số công việc
-    let todo1 = bedrock::add(&store, "Học về tracing".to_string()).await?;
-    let todo2 = bedrock::add(&store, "Triển khai khả năng quan sát".to_string()).await?;
-    let todo3 = bedrock::add(&store, "Giám sát trong môi trường sản xuất".to_string()).await?;
+    let todo1 = todo::add(&store, "Học về tracing".to_string()).await?;
+    let todo2 = todo::add(&store, "Triển khai khả năng quan sát".to_string()).await?;
+    let todo3 = todo::add(&store, "Giám sát trong môi trường sản xuất".to_string()).await?;
 
     info!("Đã thêm 3 công việc, giờ lấy lại");
 
     // Truy vấn các công việc
-    let summaries = bedrock::query(&store, false, None, 10).await?;
+    let summaries = todo::query(&store, false, None, 10).await?;
 
     let todos: Vec<_> = summaries.collect::<Result<Vec<_>, _>>()?;
     debug!(count = todos.len(), "Truy xuất công việc thành công");
 
     // Đánh dấu một công việc là hoàn thành
-    let patch = bedrock::Patch {
+    let patch = todo::Patch {
         text: None,
         done: Some(true),
     };
 
     info!(id = %todo2.id, "Đánh dấu công việc là hoàn thành");
-    bedrock::change(&store, todo2.id, patch).await?;
+    todo::change(&store, todo2.id, patch).await?;
 
     // Thử tìm một công việc không tồn tại
     let uuid = Id::new_v4(); // uuid thay cho non_existent_id
-    match bedrock::find(&store, uuid).await {
+    match todo::find(&store, uuid).await {
         Ok(_) => unreachable!("Điều này không nên thành công"),
         Err(e) => warn!(id = %uuid, error = ?e, "Lỗi dự kiến khi tìm kiếm công việc không tồn tại"),
     }
 
     // Dọn dẹp
     info!("Dọn dẹp các công việc demo");
-    bedrock::remove(&store, todo1.id).await?;
-    bedrock::remove(&store, todo2.id).await?;
-    bedrock::remove(&store, todo3.id).await?;
+    todo::remove(&store, todo1.id).await?;
+    todo::remove(&store, todo2.id).await?;
+    todo::remove(&store, todo3.id).await?;
 
     info!("Demo tracing hoàn thành thành công");
     Ok(())
