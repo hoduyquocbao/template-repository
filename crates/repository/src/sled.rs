@@ -534,7 +534,15 @@ mod tests {
     // use super::*;
     use crate::{Entity, Id, Sled};
     use serde::{Serialize, Deserialize};
-    
+    use tempfile::tempdir;
+
+    #[allow(dead_code)]
+    fn memory() -> Sled {
+        let dir = tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        Sled::new(&path).unwrap()
+    }
+
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     struct Thing {
         id: Id,
@@ -564,15 +572,6 @@ mod tests {
         fn summary(&self) -> Self::Summary {
             Brief { id: self.id, name: self.name.clone() }
         }
-    }
-    
-
-    #[allow(dead_code)]
-    fn memory() -> Sled {
-        // Sử dụng uuid để đảm bảo mỗi test có đường dẫn riêng
-        // Thay đổi: unique_path -> path
-        let path = format!("db/{}", uuid::Uuid::new_v4());
-        Sled::new(&path).unwrap()
     }
 
     #[test]

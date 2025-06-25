@@ -15,10 +15,11 @@ pub trait Extension {
     /// Chuyển đổi lỗi phân tích cú pháp thành loại lỗi của chúng ta
     /// Mục đích: Đảm bảo mọi lỗi parse đều được ánh xạ về Error nội bộ.
     fn parse(err: ParseError) -> Self;
-    
-    /// Chuyển đổi lỗi vào/ra (IO) thành loại lỗi của chúng ta
-    /// Mục đích: Bọc lỗi IO từ std thành Error nội bộ, giúp trace nguồn gốc lỗi IO.
-    fn io(err: std::io::Error) -> Self;
+
+    // Phương thức 'io' đã được loại bỏ vì 'Error::Io' trực tiếp đảm nhận
+    // Chuyển đổi lỗi vào/ra (IO) thành loại lỗi của chúng ta
+    // Mục đích: Bọc lỗi IO từ std thành Error nội bộ, giúp trace nguồn gốc lỗi IO.
+    // fn io(err: std::io::Error) -> Self;
 }
 
 // Triển khai Extension cho enum Error của hệ thống
@@ -26,8 +27,9 @@ impl Extension for Error {
     fn parse(_err: ParseError) -> Self {
         Error::Input // Ánh xạ lỗi phân tích thành lỗi đầu vào (Input)
     }
-    
-    fn io(err: std::io::Error) -> Self {
-        Error::Store(sled::Error::Io(err)) // Bọc lỗi IO trong lỗi lưu trữ (Store), giúp trace lỗi IO từ sled
-    }
+
+    // Triển khai cho 'io' đã được loại bỏ
+    // fn io(err: std::io::Error) -> Self {
+    //     Error::Store(sled::Error::Io(err)) // Bọc lỗi IO trong lỗi lưu trữ (Store), giúp trace lỗi IO từ sled
+    // }
 }

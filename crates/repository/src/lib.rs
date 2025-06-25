@@ -17,6 +17,7 @@ pub mod storage;    // Module trait Storage, trừu tượng hóa backend lưu t
 pub mod pool;       // Module quản lý pool kết nối, tối ưu concurrency
 pub mod cache;      // Module cache, tăng tốc truy xuất thực thể
 pub mod metric;     // Module thu thập metric, quan sát hiệu năng
+pub mod time;       // THÊM MỚI: Module tiện ích thời gian
 
 // --- Tái xuất các thành phần cốt lõi ---
 // Mục đích: Tạo API gọn gàng, giúp người dùng chỉ cần import từ crate gốc
@@ -30,3 +31,4 @@ pub use uuid::Uuid as Id; // Định danh duy nhất, tái xuất với tên Id 
 pub use pool::Pool; // Struct pool kết nối, một từ duy nhất
 pub use cache::Cache; // Struct cache, một từ duy nhất
 pub use metric::{Metric, Registry}; // Struct metric và registry, một từ duy nhất
+pub use time::now; // THÊM MỚI: Tái xuất hàm now()

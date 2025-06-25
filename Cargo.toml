@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/repository", "crates/todo"] 
+members = [
+    "crates/repository",
+    "crates/todo",
+    "crates/architecture", 
+    "crates/memories"     
+]
 
 resolver = "2"
 
@@ -22,6 +27,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = "1.21.3"
 # Lock-free synchronization primitives
 parking_lot = "0.12"
+# Thư viện để làm việc với CSV
+csv = "1.3"
+chrono = { version = "0.4", features = ["serde"] }
+
+# [workspace.dependencies]
+criterion = "0.4"
+tempfile = "3.5" 
+rand = "0.8"
 
 # Tối ưu hóa các bản build phát hành để đạt hiệu năng tối đa
 [profile.release]

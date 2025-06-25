@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# Feature này dùng để expose các hàm chỉ dành cho test/benchmark
+testing = []
+
 [dependencies]
 sled = { workspace = true }
 serde = { workspace = true }
@@ -18,9 +22,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+csv  = { workspace = true }
 
 
-
-[features]
-# Feature này dùng để expose các hàm chỉ dành cho test/benchmark
-testing = []
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+rand = { workspace = true }

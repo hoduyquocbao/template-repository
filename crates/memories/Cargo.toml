@@ -1,0 +1,18 @@
+[package]
+name = "memories"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+repository = { path = "../repository" } # Phụ thuộc vào crate repository để sử dụng Error
+chrono = { workspace = true, features = ["serde"] }
+csv = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+rand = { workspace = true }

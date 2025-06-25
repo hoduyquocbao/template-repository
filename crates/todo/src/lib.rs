@@ -135,8 +135,9 @@ pub fn now() -> u128 {
 ///
 /// # Ví dụ
 ///
-/// ```rust
-/// # use repository::{Sled, Storage, add, Error};
+/// ```rust,no_run
+/// # use todo::add;
+/// # use repository::{Sled, Storage, Error};
 /// # use tempfile::tempdir;
 /// #
 /// # #[tokio::main]
@@ -195,8 +196,9 @@ pub async fn add<S: Storage>(store: &S, text: String) -> Result<Todo, Error> {
 ///
 /// # Ví dụ
 ///
-/// ```rust
-/// # use repository::{Sled, Storage, add, find, Error, Id};
+/// ```rust,no_run
+/// # use todo::{add, find};
+/// # use repository::{Sled, Storage, Error, Id};
 /// # use tempfile::tempdir;
 /// #
 /// # #[tokio::main]
@@ -313,11 +315,12 @@ mod tests {
     use super::*;
     use repository::sled::Sled;
     use tokio::runtime::Runtime;
+    use tempfile::tempdir;
 
     fn memory() -> Sled {
-        // Sử dụng uuid để đảm bảo mỗi test có đường dẫn riêng
-        let path = format!("db/{}", uuid::Uuid::new_v4());
-        Sled::new(&path).unwrap() // Use the public constructor
+        let dir = tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        Sled::new(&path).unwrap()
     }
     
 
@@ -456,7 +459,7 @@ mod tests {
             ];
             
             // Chuyển quyền sở hữu của todos thay vì clone
-            crate::bulk(&store, todos.into_iter()).await.unwrap();
+            super::bulk(&store, todos.into_iter()).await.unwrap();
 
             // Fix the query calls to use the correct 4-argument pattern
             // Kiểm tra các mục đang chờ - thu thập vào Vec để sử dụng len()

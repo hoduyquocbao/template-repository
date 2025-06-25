@@ -24,7 +24,7 @@ async fn main() -> Result<(), Error> {
     info!("Bắt đầu demo tracing");
 
     // Tạo cơ sở dữ liệu tạm thời cho ví dụ này
-    let temp = tempfile::tempdir().map_err(Error::io)?; // temp thay cho temp_dir
+    let temp = tempfile::tempdir().map_err(Error::Io)?; // temp thay cho temp_dir
     let path = temp.path().to_str().unwrap(); // path thay cho db_path
     let store = Sled::new(path)?;
 
