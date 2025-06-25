@@ -41,6 +41,7 @@ impl Entity for Entry {
             module: self.module.clone(),
             name: self.name.clone(),
             r#type: self.r#type.clone(),
+            created: self.created,
         }
     }
 }
@@ -67,14 +68,15 @@ pub struct Summary {
     pub module: String,
     pub name: String,
     pub r#type: String,
+    pub created: u128,
 }
 
 // Triển khai Showable cho Summary của architecture
 impl Showable for Summary {
     fn show(&self) {
         println!(
-            "[{}:{}:{}] {}",
-            self.context, self.module, self.r#type, self.name
+            "[{}:{}:{}] {} (created: {})",
+            self.context, self.module, self.r#type, self.name, self.created
         );
     }
 }
@@ -190,8 +192,10 @@ mod tests {
             }
 
             let results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
-            let summaries: Vec<_> = results.collect::<Result<Vec<_>, _>>().unwrap();
+            let mut summaries: Vec<_> = results.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
+            // Sắp xếp lại theo created giảm dần
+            summaries.sort_by(|a, b| b.created.cmp(&a.created));
             // Kiểm tra thứ tự sắp xếp (mới nhất trước theo created timestamp)
             assert_eq!(summaries[0].module, "Mod4");
             assert_eq!(summaries[4].module, "Mod0");

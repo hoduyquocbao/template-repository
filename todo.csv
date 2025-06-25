@@ -1,11 +1,12 @@
 ID,Context,Module,Task,Priority,Status,Assignee,Due,Notes
-"task-001","Refactor","shared","Loại bỏ hàm `filter` và đảm bảo `query` đủ generic.",High,Done,Guardian,,Đã loại bỏ filter, chuẩn hóa query, sạch clippy.
-"task-002","Refactor","shared","Đồng bộ `edition` trong Cargo.toml về '2021'.",Medium,Done,Guardian,,Đã đồng bộ edition 2021 cho toàn bộ crate.
-"task-003","Refactor","todo","Cập nhật hàm `query` để nhận `repository::Query`.",High,Done,Guardian,,Đã chuẩn hóa query, truyền đúng struct, sạch clippy.
-"task-004","Refactor","todo/bin/main.rs","Cập nhật logic của subcommand `list` để xây dựng `Query` object.",High,Done,Guardian,,Đã cập nhật logic list, truyền đúng query, sạch clippy.
-"task-005","Refactor","todo/benches/speed.rs","Đổi tên tất cả các định danh vi phạm quy tắc đơn từ.",High,Done,Guardian,,Đã đổi tên toàn bộ định danh, tuân thủ quy tắc một từ.
-"task-006","Refactor","architecture","Chuẩn hóa hàm `query` và đơn giản hóa hàm `add`.",High,Done,Guardian,,Đã chuẩn hóa query, add, test, sạch clippy.
-"task-007","Refactor","memories","Chuẩn hóa hàm `query` và sửa lỗi logic `add`.",High,Done,Guardian,,Đã chuẩn hóa query, add, test, sạch clippy.
-"task-008","Refactor","knowledge","Cập nhật lớp facade để tương thích với signature mới.",Medium,Done,Guardian,,Đã cập nhật knowledge facade, truyền đúng tham số mới.
-"task-009","Refactor","repository","Sửa các vi phạm quy tắc đặt tên trong hằng số và test.",Medium,Done,Guardian,,Đã sửa các hằng số, test, sạch clippy.
-"task-010","Refactor","todo/examples","Sửa các vi phạm quy tắc đặt tên trong code ví dụ.",Medium,Done,Guardian,,Đã chuẩn hóa ví dụ, tuân thủ quy tắc một từ, sạch clippy.
+"task-001","Refactor","shared","Loại bỏ hàm `filter` và đảm bảo `query` đủ generic.","High","Done","Guardian","","Đã loại bỏ filter, chuẩn hóa query, sạch clippy."
+"task-002","Refactor","shared","Đồng bộ `edition` trong Cargo.toml về '2021'.","Medium","Done","Guardian","","Đã đồng bộ edition 2021 cho toàn bộ crate."
+"task-003","Refactor","todo","Cập nhật hàm `query` để nhận `repository::Query`.","High","Done","Guardian","","Đã chuẩn hóa query, truyền đúng struct, sạch clippy."
+"task-004","Refactor","todo/bin/main.rs","Cập nhật logic của subcommand `list` để xây dựng `Query` object.","High","Done","Guardian","","Đã cập nhật logic list, truyền đúng query, sạch clippy."
+"task-005","Refactor","todo/benches/speed.rs","Đổi tên tất cả các định danh vi phạm quy tắc đơn từ.","High","Done","Guardian","","Đã đổi tên toàn bộ định danh, tuân thủ quy tắc một từ."
+"task-006","Refactor","architecture","Chuẩn hóa hàm `query` và đơn giản hóa hàm `add`.","High","Done","Guardian","","Đã chuẩn hóa query, add, test, sạch clippy."
+"task-007","Refactor","memories","Chuẩn hóa hàm `query` và sửa lỗi logic `add`.","High","Done","Guardian","","Đã chuẩn hóa query, add, test, sạch clippy."
+"task-008","Refactor","knowledge","Cập nhật lớp facade để tương thích với signature mới.","Medium","Done","Guardian","","Đã cập nhật knowledge facade, truyền đúng tham số mới."
+"task-009","Refactor","repository","Sửa các vi phạm quy tắc đặt tên trong hằng số và test.","Medium","Done","Guardian","","Đã sửa các hằng số, test, sạch clippy."
+"task-010","Refactor","todo/examples","Sửa các vi phạm quy tắc đặt tên trong code ví dụ.","Medium","Done","Guardian","","Đã chuẩn hóa ví dụ, tuân thủ quy tắc một từ, sạch clippy."
+"task-011","Refactor","System","Hoàn thiện refactor, test, benchmark, enum, truyền kiểu, truy vấn, sạch lint, sạch warning, không còn nợ kỹ thuật.","High","Done","Guardian","","Codebase đạt trạng thái thanh lịch, rõ ràng, dễ bảo trì."

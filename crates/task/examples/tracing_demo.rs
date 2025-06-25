@@ -1,6 +1,7 @@
 use repository::{self, Sled, Id, Error, Extension};
 use tracing::{debug, info, trace_span, warn, Level};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use task::{Status, Priority};
 
 /// Ví dụ minh họa cách sử dụng tracing trong ứng dụng repository
 ///
@@ -33,39 +34,41 @@ async fn main() -> Result<(), Error> {
     let _guard = span.enter();
 
     // Thêm một số công việc
-    let todo1 = todo::add(&store, "Học về tracing".to_string()).await?;
-    let todo2 = todo::add(&store, "Triển khai khả năng quan sát".to_string()).await?;
-    let todo3 = todo::add(&store, "Giám sát trong môi trường sản xuất".to_string()).await?;
+    let entry1 = task::add(&store, "Học về tracing".to_string(), "module1".to_string(), "task1".to_string(), Priority::High, Status::Open, "assignee1".to_string(), "2024-05-01".to_string(), "notes1".to_string()).await?;
+    let entry2 = task::add(&store, "Triển khai khả năng quan sát".to_string(), "module2".to_string(), "task2".to_string(), Priority::High, Status::Open, "assignee2".to_string(), "2024-05-02".to_string(), "notes2".to_string()).await?;
+    let entry3 = task::add(&store, "Giám sát trong môi trường sản xuất".to_string(), "module3".to_string(), "task3".to_string(), Priority::High, Status::Open, "assignee3".to_string(), "2024-05-03".to_string(), "notes3".to_string()).await?;
 
     info!("Đã thêm 3 công việc, giờ lấy lại");
 
     // Truy vấn các công việc
-    let summaries = todo::query(&store, false, None, 10).await?;
+    let prefix = vec![(&Status::Open).into()];
+    let query_obj = shared::query(prefix, None::<Vec<u8>>, 10);
+    let summaries = task::query(&store, query_obj).await?;
 
-    let todos: Vec<_> = summaries.collect::<Result<Vec<_>, _>>()?;
-    debug!(count = todos.len(), "Truy xuất công việc thành công");
+    let tasks: Vec<_> = summaries.collect::<Result<Vec<_>, _>>()?;
+    debug!(count = tasks.len(), "Truy xuất công việc thành công");
 
     // Đánh dấu một công việc là hoàn thành
-    let patch = shared::Patch {
-        text: None,
-        done: Some(true),
+    let patch = task::Patch {
+        status: Some(Status::Done),
+        ..Default::default()
     };
 
-    info!(id = %todo2.id, "Đánh dấu công việc là hoàn thành");
-    todo::change(&store, todo2.id, patch).await?;
+    info!(id = %entry2.id, "Đánh dấu công việc là hoàn thành");
+    task::change(&store, entry2.id, patch).await?;
 
     // Thử tìm một công việc không tồn tại
     let uuid = Id::new_v4(); // uuid thay cho non_existent_id
-    match todo::find(&store, uuid).await {
+    match task::find(&store, uuid).await {
         Ok(_) => unreachable!("Điều này không nên thành công"),
         Err(e) => warn!(id = %uuid, error = ?e, "Lỗi dự kiến khi tìm kiếm công việc không tồn tại"),
     }
 
     // Dọn dẹp
     info!("Dọn dẹp các công việc demo");
-    todo::remove(&store, todo1.id).await?;
-    todo::remove(&store, todo2.id).await?;
-    todo::remove(&store, todo3.id).await?;
+    task::remove(&store, entry1.id).await?;
+    task::remove(&store, entry2.id).await?;
+    task::remove(&store, entry3.id).await?;
 
     info!("Demo tracing hoàn thành thành công");
     Ok(())

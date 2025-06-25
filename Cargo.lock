@@ -616,7 +616,7 @@ dependencies = [
  "memories",
  "repository",
  "shared",
- "todo",
+ "task",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1179,6 +1179,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "task"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "chrono",
+ "clap 4.5.40",
+ "criterion",
+ "once_cell",
+ "parking_lot 0.12.4",
+ "rand",
+ "repository",
+ "serde",
+ "shared",
+ "sled",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1234,30 +1258,6 @@ checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "todo"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "chrono",
- "clap 4.5.40",
- "criterion",
- "once_cell",
- "parking_lot 0.12.4",
- "rand",
- "repository",
- "serde",
- "shared",
- "sled",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

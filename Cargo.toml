@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "crates/repository",
-    "crates/todo",
-    "crates/architecture", 
-    "crates/memories",
+    "crates/architecture",
     "crates/knowledge",
-    "crates/shared"
+    "crates/memories",
+    "crates/repository",
+    "crates/shared",
+    "crates/task"
 ]
 
 resolver = "2"

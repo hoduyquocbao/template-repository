@@ -6,7 +6,9 @@ use repository::{self, Sled, Id, Error};
 use tracing::info;
 
 // Import các submodule mới với tên đơn từ
-use knowledge::{architecture, memories, task, display};
+use knowledge::{architecture, memories, task};
+use knowledge::task::Status;
+use knowledge::display;
 
 /// Hệ thống quản lý tri thức kiến trúc và phát triển.
 #[derive(Parser)]
@@ -32,7 +34,7 @@ enum Commands {
         #[command(subcommand)]
         command: Memories, // ĐÃ ĐỔI TÊN TỪ MemCmd THÀNH Memories
     },
-    /// Quản lý các bản ghi công việc (todo list)
+    /// Quản lý các bản ghi công việc (task list)
     Task {
         #[command(subcommand)]
         command: Task, // ĐÃ ĐỔI TÊN TỪ TaskCmd THÀNH Task
@@ -302,21 +304,25 @@ async fn main() -> Result<(), repository::Error> {
         },
         Commands::Task { command } => match command {
             Task::Add { text } => { // Cập nhật tên enum
-                let task = task::add(&store, text).await?;
-                println!("Đã thêm công việc: [{}], {}", task.id, task.text);
+                let task = task::add(&store, "".to_string(), "".to_string(), text, "Medium".to_string(), "Pending".to_string(), "".to_string(), "".to_string(), "".to_string()).await?;
+                println!("Đã thêm công việc: [{}], {}", task.id, task.task);
             }
             Task::Get { id } => { // Cập nhật tên enum
                 let task = task::get(&store, id).await?;
-                let status = if task.done { "hoàn thành" } else { "đang chờ" };
-                println!("[{}] {} ({})", task.id, task.text, status);
+                let status = match task.status {
+                    Status::Done => "hoàn thành",
+                    Status::Pending => "đang chờ",
+                    Status::Open => "mở",
+                };
+                println!("[{}] {} ({})", task.id, task.task, status);
             }
             Task::Done { id } => { // Cập nhật tên enum
                 let task = task::done(&store, id).await?;
-                println!("Đã hoàn thành công việc: [{}], {}", task.id, task.text);
+                println!("Đã hoàn thành công việc: [{}], {}", task.id, task.task);
             }
             Task::Del { id } => { // Cập nhật tên enum
                 let task = task::del(&store, id).await?;
-                println!("Đã xóa công việc: [{}], {}", task.id, task.text);
+                println!("Đã xóa công việc: [{}], {}", task.id, task.task);
             }
             Task::List { done, pending, limit } => { // Cập nhật tên enum
                 let result = task::list(&store, done, pending, limit).await?;

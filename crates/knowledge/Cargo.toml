@@ -11,5 +11,5 @@ tracing-subscriber = { workspace = true }
 repository = { path = "../repository" } # Để truy cập Sled và Error
 architecture = { path = "../architecture" } # Để tương tác với bản ghi kiến trúc
 memories = { path = "../memories" }     # Để tương tác với bản ghi bộ nhớ
-todo = { path = "../todo" }             # Để tương tác với bản ghi công việc
+task = { path = "../task" }             # Để tương tác với bản ghi công việc
 shared = { path = "../shared" }         # Để tương tác với bản ghi công việc

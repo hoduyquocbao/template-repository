@@ -4,9 +4,9 @@ use once_cell::sync::Lazy; // Sử dụng once_cell để khởi tạo runtime m
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, BatchSize, PlotConfiguration, AxisScale, Bencher};
 use repository::{self, Sled, Id, Error,  Storage}; 
 use tempfile::tempdir; 
-use todo::{Summary, Todo};
+use task::{Entry, Patch, Status, Priority, Summary};
 use tokio::runtime::{Runtime, Builder};
-use shared::{Patch, filter};
+use shared::query;
 
 
 // Tạo một Tokio runtime toàn cục để sử dụng trong các benchmark
@@ -28,101 +28,121 @@ struct BenchStore {
     // Không cần runtime ở đây nữa vì chúng ta dùng RT toàn cục
 }
 
-/// Truy vấn và trả về các đối tượng Todo đầy đủ.
-fn fetch(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Todo>, Error> {
-    let query = filter(status, None, limit);
-    // Sử dụng rt() đã định nghĩa
-    // Lời gọi store.store.query sẽ hoạt động sau khi import Storage
-    let summaries: Vec<_> = rt().block_on(async { store.store.query::<Todo>(query).await })?
+/// Truy vấn và trả về các đối tượng Task đầy đủ.
+fn fetch(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Entry>, Error> {
+    let prefix = vec![(&if status { Status::Done } else { Status::Open }).into()];
+    let query_obj = query(prefix, None::<Vec<u8>>, limit);
+    let summaries: Vec<_> = rt().block_on(async { store.store.query::<Entry>(query_obj).await })?
         .collect::<Result<Vec<_>, _>>()?;
-    
-    let mut todos = Vec::with_capacity(summaries.len());
+    let mut tasks = Vec::with_capacity(summaries.len());
     for summary in summaries {
-        // Sử dụng rt()
-        let todo = rt().block_on(async { todo::find(&store.store, summary.id).await })?;
-        todos.push(todo);
+        let task = rt().block_on(async { task::find(&store.store, summary.id).await })?;
+        tasks.push(task);
     }
-    Ok(todos)
+    Ok(tasks)
 }
 
 /// Truy vấn và chỉ trả về các bản tóm tắt (Summary).
-fn list(store: &BenchStore, done: bool, limit: usize) -> Result<Vec<Summary>, Error> {
-    let query = filter(done, None, limit);
-    // Sử dụng rt()
-    // Lời gọi store.store.query sẽ hoạt động sau khi import Storage
-    let results = rt().block_on(async { store.store.query::<Todo>(query).await })?;
+fn list(store: &BenchStore, status: bool, limit: usize) -> Result<Vec<Summary>, Error> {
+    let prefix = vec![(&if status { Status::Done } else { Status::Open }).into()];
+    let query_obj = query(prefix, None::<Vec<u8>>, limit);
+    let results = rt().block_on(async { store.store.query::<Entry>(query_obj).await })?;
     let summaries: Vec<_> = results.collect::<Result<Vec<_>, _>>()?;
     Ok(summaries)
 }
 
 /// Thiết lập cơ sở dữ liệu với một số lượng bản ghi cụ thể.
 fn prepare(count: usize) -> BenchStore {
-    let dir = tempdir().unwrap(); // Đã import
+    let dir = tempdir().unwrap();
     let path = dir.path().to_str().unwrap().to_string();
     let store = Sled::new(&path).unwrap();
-
-    let todos = (0..count).map(|i| Todo {
+    let entries = (0..count).map(|i| Entry {
         id: Id::new_v4(),
-        text: format!("Công việc mẫu {}", i),
-        done: i % 2 == 0,
+        context: "bench".to_string(),
+        module: "mod".to_string(),
+        task: format!("Công việc mẫu {}", i),
+        priority: if i % 2 == 0 { Priority::High } else { Priority::Medium },
+        status: if i % 2 == 0 { Status::Open } else { Status::Done },
+        assignee: "bench".to_string(),
+        due: "2025-01-01".to_string(),
+        notes: "benchmark".to_string(),
         created: repository::now(),
     });
-
-    // Sử dụng rt()
     rt().block_on(async {
-        todo::bulk(&store, todos).await.unwrap();
+        task::bulk(&store, entries).await.unwrap();
     });
-    
-    BenchStore { store, _dir: dir } // _dir để giữ tempdir
+    BenchStore { store, _dir: dir }
 }
 
 fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>, size: usize) {
     let store = prepare(size);
-    let limit = std::cmp::min(size, 100); 
-
+    let limit = std::cmp::min(size, 100);
     group.bench_function(BenchmarkId::new("add", size), |b: &mut Bencher| {
-        // Sửa cách gọi benchmark bất đồng bộ
         b.iter_batched(
-            || format!("Công việc benchmark {}", rand::random::<u32>()),
-            |text| rt().block_on(todo::add(&store.store, text)),
+            || Entry {
+                id: Id::new_v4(),
+                context: "bench".to_string(),
+                module: "mod".to_string(),
+                task: "Benchmark add".to_string(),
+                priority: Priority::High,
+                status: Status::Open,
+                assignee: "bench".to_string(),
+                due: "2025-01-01".to_string(),
+                notes: "benchmark".to_string(),
+                created: repository::now(),
+            },
+            |entry| rt().block_on(task::add(
+                &store.store,
+                entry.context,
+                entry.module,
+                entry.task,
+                entry.priority,
+                entry.status,
+                entry.assignee,
+                entry.due,
+                entry.notes,
+            )),
             BatchSize::SmallInput,
         );
     });
-
     if size > 0 {
-        // Thay đổi: existing_summaries -> summaries
         let summaries = list(&store, false, 1).expect("Không thể lấy summary để test");
-        // Thay đổi: id_to_use -> id
         let id = if !summaries.is_empty() {
             summaries[0].id
         } else {
-            // Thay đổi: done_summaries -> summaries
-            let summaries = list(&store, true, 1).expect("Không thể lấy summary (done) để test");
-            if !summaries.is_empty() {
-                summaries[0].id
-            } else {
-                // Sử dụng rt()
-                // Thay đổi: temp_todo -> todo
-                let todo = rt().block_on(todo::add(&store.store, "temp".to_string())).unwrap();
-                // Thay đổi: temp_todo -> todo
-                todo.id
-            }
+            let entry = Entry {
+                id: Id::new_v4(),
+                context: "bench".to_string(),
+                module: "mod".to_string(),
+                task: "temp".to_string(),
+                priority: Priority::High,
+                status: Status::Open,
+                assignee: "bench".to_string(),
+                due: "2025-01-01".to_string(),
+                notes: "benchmark".to_string(),
+                created: repository::now(),
+            };
+            let task = rt().block_on(task::add(
+                &store.store,
+                entry.context,
+                entry.module,
+                entry.task,
+                entry.priority,
+                entry.status,
+                entry.assignee,
+                entry.due,
+                entry.notes,
+            )).unwrap();
+            task.id
         };
-
         group.bench_function(BenchmarkId::new("find", size), |b: &mut Bencher| {
-            // Sửa cách gọi benchmark bất đồng bộ
-            // Thay đổi: id_to_use -> id
-            b.iter(|| rt().block_on(todo::find(&store.store, id)));
+            b.iter(|| rt().block_on(task::find(&store.store, id)));
         });
-
         group.bench_function(BenchmarkId::new("change", size), |b: &mut Bencher| {
-            // Sửa cách gọi benchmark bất đồng bộ
-            let patch = Patch { text: Some("đã cập nhật".to_string()), done: Some(true) }; // Patch đã được import
-            // Thay đổi: id_to_use -> id
-            b.iter(|| rt().block_on(todo::change(&store.store, id, patch.clone())));
+            let patch = Patch { status: Some(Status::Done), ..Default::default() };
+            b.iter(|| rt().block_on(task::change(&store.store, id, patch.clone())));
         });
     }
-
     group.bench_function(BenchmarkId::new("query_summary", size), |b| {
         b.iter(|| {
             match list(&store, false, limit) {
@@ -131,7 +151,6 @@ fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>
             }
         });
     });
-    
     group.bench_function(BenchmarkId::new("query_full", size), |b| {
         b.iter(|| {
             match fetch(&store, false, limit) {
@@ -144,26 +163,20 @@ fn bench(group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>
 
 fn compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryComparison");
-    // Thay đổi: store_small -> store (sử dụng shadowing)
-    let store = prepare(100);
     // So sánh query_summary
+    let store = prepare(100);
     group.bench_function("summary_small", |b| b.iter(|| list(&store, false, 50)));
-    // Thay đổi: store_medium -> store (sử dụng shadowing)
     let store = prepare(1_000);
     group.bench_function("summary_medium", |b| b.iter(|| list(&store, false, 50)));
-    // Thay đổi: store_large_comp -> store (sử dụng shadowing)
     let store = prepare(10_000);
     group.bench_function("summary_large", |b| b.iter(|| list(&store, false, 50)));
-
     // So sánh query_full
-    // Sử dụng lại shadowing cho các store ở đây
-    let store = prepare(100); // store_small
+    let store = prepare(100);
     group.bench_function("full_small", |b| b.iter(|| fetch(&store, false, 50)));
-    let store = prepare(1_000); // store_medium
+    let store = prepare(1_000);
     group.bench_function("full_medium", |b| b.iter(|| fetch(&store, false, 50)));
-    let store = prepare(10_000); // store_large_comp
+    let store = prepare(10_000);
     group.bench_function("full_large", |b| b.iter(|| fetch(&store, false, 50)));
-
     group.finish();
 }
 
@@ -218,10 +231,30 @@ fn scale(c: &mut Criterion) {
         let limit = std::cmp::min(size_val, 100);
 
         group.bench_with_input(BenchmarkId::new("add_scale", size_val), &size_val, |b: &mut Bencher, &_s| {
-            // Sửa cách gọi benchmark bất đồng bộ
             b.iter_batched(
-                || format!("Công việc benchmark {}", rand::random::<u32>()),
-                |text| rt().block_on(todo::add(&store.store, text)),
+                || Entry {
+                    id: Id::new_v4(),
+                    context: "bench".to_string(),
+                    module: "mod".to_string(),
+                    task: format!("Công việc benchmark {}", rand::random::<u32>()),
+                    priority: Priority::High,
+                    status: Status::Open,
+                    assignee: "bench".to_string(),
+                    due: "2025-01-01".to_string(),
+                    notes: "benchmark".to_string(),
+                    created: repository::now(),
+                },
+                |entry| rt().block_on(task::add(
+                    &store.store,
+                    entry.context,
+                    entry.module,
+                    entry.task,
+                    entry.priority,
+                    entry.status,
+                    entry.assignee,
+                    entry.due,
+                    entry.notes,
+                )),
                 BatchSize::SmallInput,
             );
         });
@@ -236,7 +269,7 @@ fn scale(c: &mut Criterion) {
 
             group.bench_with_input(BenchmarkId::new("find_scale", size_val), &id, |b: &mut Bencher, &local_id| { // đổi tên id ở đây để tránh xung đột với id bên ngoài nếu có
                 // Sửa cách gọi benchmark bất đồng bộ
-                b.iter(|| rt().block_on(todo::find(&store.store, local_id)));
+                b.iter(|| rt().block_on(task::find(&store.store, local_id)));
             });
         }
 

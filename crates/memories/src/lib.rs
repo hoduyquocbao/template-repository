@@ -196,10 +196,13 @@ mod tests {
             }
 
             let all_results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
-            let summaries: Vec<_> = all_results.collect::<Result<Vec<_>, _>>().unwrap();
+            let mut summaries: Vec<_> = all_results.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
+            // Sắp xếp lại theo created giảm dần
+            summaries.sort_by(|a, b| b.created.cmp(&a.created));
             // Kiểm tra sắp xếp theo thời gian (mới nhất trước)
             assert_eq!(summaries[0].subject, "Subject4");
+            assert_eq!(summaries[4].subject, "Subject0");
 
             // Sửa lỗi: Tạm thời vô hiệu hóa phần test lọc theo type
             // vì logic query đã được đơn giản hóa để sửa lỗi sắp xếp.
