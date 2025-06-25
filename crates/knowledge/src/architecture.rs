@@ -21,10 +21,11 @@ pub struct Add {
 /// Thêm hoặc cập nhật một bản ghi kiến trúc.
 /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
 pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
+    let kind = architecture::Kind::try_from(args.r#type)?;
     let entry = Entry {
         context: args.context,
         module: args.module,
-        r#type: args.r#type,
+        r#type: kind,
         name: args.name,
         responsibility: args.responsibility,
         dependency: args.dependency,

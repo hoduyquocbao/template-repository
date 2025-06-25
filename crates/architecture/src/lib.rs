@@ -4,6 +4,57 @@
 use serde::{Deserialize, Serialize};
 use repository::{Entity, Storage, Error, Key, now, Query};
 use shared::{Showable, Filterable};
+use std::convert::TryFrom;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum Kind {
+    Context,
+    Module,
+    Agent,
+    Trait,
+    Entity,
+    Aggregate,
+    Value,
+    Other,
+}
+
+impl From<&Kind> for u8 {
+    fn from(kind: &Kind) -> u8 {
+        match kind {
+            Kind::Context => 0,
+            Kind::Module => 1,
+            Kind::Agent => 2,
+            Kind::Trait => 3,
+            Kind::Entity => 4,
+            Kind::Aggregate => 5,
+            Kind::Value => 6,
+            Kind::Other => 255,
+        }
+    }
+}
+
+impl TryFrom<String> for Kind {
+    type Error = Error;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.to_lowercase().as_str() {
+            "context" => Ok(Kind::Context),
+            "module" => Ok(Kind::Module),
+            "agent" => Ok(Kind::Agent),
+            "trait" => Ok(Kind::Trait),
+            "entity" => Ok(Kind::Entity),
+            "aggregate" => Ok(Kind::Aggregate),
+            "value" => Ok(Kind::Value),
+            "other" => Ok(Kind::Other),
+            _ => Err(Error::Input),
+        }
+    }
+}
+
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 /// Đại diện cho một bản ghi kiến trúc.
 /// Đây là một `Entity` có thể được lưu trữ và truy vấn thông qua `repository`.
@@ -11,7 +62,7 @@ use shared::{Showable, Filterable};
 pub struct Entry {
     pub context: String,      // Ngữ cảnh (Bounded Context)
     pub module: String,       // Module hoặc crate
-    pub r#type: String,       // Loại thành phần (Agent, Module, Trait, etc.)
+    pub r#type: Kind,         // Loại thành phần (Agent, Module, Trait, etc.)
     pub name: String,         // Tên định danh
     pub responsibility: String, // Trách nhiệm chính
     pub dependency: String,   // Phụ thuộc
@@ -32,7 +83,14 @@ impl Entity for Entry {
     }
 
     fn index(&self) -> Self::Index {
-        self.key().into_bytes()
+        let mut index = Vec::new();
+        index.push((&self.r#type).into());
+        index.extend_from_slice(self.context.as_bytes());
+        index.push(0);
+        index.extend_from_slice(self.module.as_bytes());
+        index.push(0);
+        index.extend_from_slice(self.name.as_bytes());
+        index
     }
 
     fn summary(&self) -> Self::Summary {
@@ -53,7 +111,7 @@ impl Filterable for Entry {
         let mut key = Key::reserve(Entity::key(self).len() + 16);
         key.byte(1);
         key.time(self.created);
-        key.byte(self.r#type.as_bytes()[0]);
+        key.byte((&self.r#type).into());
         key.build()
     }
     fn after(&self) -> Option<Self::After> {
@@ -67,7 +125,7 @@ pub struct Summary {
     pub context: String,
     pub module: String,
     pub name: String,
-    pub r#type: String,
+    pub r#type: Kind,
     pub created: u128,
 }
 
@@ -132,7 +190,7 @@ mod tests {
         rt.block_on(async {
             let store = memory();
             let entry1 = Entry {
-                context: "Sys".to_string(), module: "Dir".to_string(), r#type: "Agent".to_string(), name: "Dir".to_string(),
+                context: "Sys".to_string(), module: "Dir".to_string(), r#type: Kind::Agent, name: "Dir".to_string(),
                 responsibility: "Coord".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                 prompt: "".to_string(), created: 0, // Sẽ được ghi đè bởi add
             };
@@ -164,7 +222,7 @@ mod tests {
         rt.block_on(async {
             let store = memory();
             let entry = Entry {
-                context: "Sys".to_string(), module: "Mod".to_string(), r#type: "Type".to_string(), name: "Name".to_string(),
+                context: "Sys".to_string(), module: "Mod".to_string(), r#type: Kind::Agent, name: "Name".to_string(),
                 responsibility: "Resp".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                 prompt: "".to_string(), created: now(),
             };
@@ -184,7 +242,7 @@ mod tests {
             let store = memory();
             for i in 0..5 {
                 let entry = Entry {
-                    context: "Test".to_string(), module: format!("Mod{}", i), r#type: "Comp".to_string(), name: format!("Item{}", i),
+                    context: "Test".to_string(), module: format!("Mod{}", i), r#type: Kind::Agent, name: format!("Item{}", i),
                     responsibility: "".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                     prompt: "".to_string(), created: now() + i as u128,
                 };

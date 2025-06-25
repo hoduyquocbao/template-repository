@@ -118,20 +118,21 @@ async fn main() -> Result<(), repository::Error> {
             info!(
                 %context, %module, %r#type, %name, "Đang xử lý lệnh thêm/cập nhật bản ghi kiến trúc"
             );
+            let kind = architecture::Kind::try_from(r#type)?;
             let entry = Entry {
                 context,
                 module,
-                r#type,
+                r#type: kind,
                 name,
                 responsibility,
                 dependency,
                 performance,
                 naming,
                 prompt,
-                created: repository::now(), // Sử dụng now() từ repository
+                created: repository::now(),
             };
             architecture::add(&store, entry.clone()).await?;
-            println!("Đã thêm/cập nhật: [{}:{}:{}] {:?}", entry.context, entry.module, entry.r#type, entry.name);
+            println!("Đã thêm/cập nhật: [{}:{}:{:?}] {}", entry.context, entry.module, entry.r#type, entry.name);
         }
         Some(Commands::Get {
             context,
@@ -139,7 +140,8 @@ async fn main() -> Result<(), repository::Error> {
             r#type,
             name,
         }) => {
-            let key = format!("{}:{}:{}:{}", context, module, r#type, name);
+            let kind = architecture::Kind::try_from(r#type)?;
+            let key = format!("{}:{}:{}:{}", context, module, kind, name);
             info!(%key, "Đang xử lý lệnh lấy bản ghi kiến trúc");
             match architecture::find(&store, key.clone()).await? {
                 Some(entry) => {
@@ -165,11 +167,12 @@ async fn main() -> Result<(), repository::Error> {
             r#type,
             name,
         }) => {
-            let key = format!("{}:{}:{}:{}", context, module, r#type, name);
+            let kind = architecture::Kind::try_from(r#type)?;
+            let key = format!("{}:{}:{}:{}", context, module, kind, name);
             info!(%key, "Đang xử lý lệnh xóa bản ghi kiến trúc");
             match architecture::remove(&store, key.clone()).await {
                 Ok(entry) => println!(
-                    "Đã xóa bản ghi: [{}:{}:{}] {}",
+                    "Đã xóa bản ghi: [{}:{}:{:?}] {}",
                     entry.context, entry.module, entry.r#type, entry.name
                 ),
                 Err(Error::Missing) => println!("Không tìm thấy bản ghi để xóa: {}", key),
