@@ -1,8 +1,8 @@
-use bedrock::{self, Sled, Id, Error, Extension};
+use repository::{self, Sled, Id, Error, Extension};
 use tracing::{debug, info, trace_span, warn, Level};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-/// Ví dụ minh họa cách sử dụng tracing trong ứng dụng bedrock
+/// Ví dụ minh họa cách sử dụng tracing trong ứng dụng repository
 ///
 /// Ví dụ này chứng minh:
 /// 1. Cách cấu hình tracing với các mức độ chi tiết khác nhau
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Error> {
         .with(
             EnvFilter::from_default_env()
                 .add_directive(Level::INFO.into()) // Mức mặc định
-                .add_directive("bedrock=debug".parse().map_err(Error::parse)?) // Chi tiết hơn cho ứng dụng
+                .add_directive("repository=debug".parse().map_err(Error::parse)?) // Chi tiết hơn cho ứng dụng
                 .add_directive("sled=warn".parse().map_err(Error::parse)?) // Chỉ cảnh báo cho sled
         )
         .init();

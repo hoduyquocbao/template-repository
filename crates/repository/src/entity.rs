@@ -12,7 +12,7 @@ use std::fmt::Debug; // Debug: Hỗ trợ debug các khóa/chỉ mục
 
 /// Một "hợp đồng" cho bất kỳ loại dữ liệu nào có thể được lưu trữ và lập chỉ mục.
 ///
-/// Trait này là trái tim của framework Bedrock. Nó buộc mọi loại dữ liệu
+/// Trait này là trái tim của framework repository. Nó buộc mọi loại dữ liệu
 /// phải định nghĩa rõ ràng cách nó được nhận dạng, lưu trữ, và quan trọng nhất,
 /// cách nó được lập chỉ mục để truy vấn hiệu suất cao.
 /// Mục đích: Đảm bảo mọi thực thể đều có thể lưu trữ, truy vấn, và tối ưu hóa hiệu năng.

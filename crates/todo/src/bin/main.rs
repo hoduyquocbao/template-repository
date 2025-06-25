@@ -2,7 +2,7 @@
 // Binary crate với CLI để tương tác với thư viện.
 
 use clap::{Parser, Subcommand};
-use bedrock::{self, Sled, Id, Error, };
+use repository::{self, Sled, Id, Error, };
 use tracing::info;
 use todo::{Summary, Patch};
 
@@ -62,11 +62,11 @@ where
 }
 
 #[tokio::main]
-async fn main() -> Result<(), bedrock::Error> {
+async fn main() -> Result<(), repository::Error> {
     // Khởi tạo tracing subscriber ở đầu chương trình
     tracing_subscriber::fmt::init();
     
-    info!("Đang khởi động ứng dụng bedrock");
+    info!("Đang khởi động ứng dụng repository");
     
     let cli = Cli::parse();
     let store = Sled::new("db")?;
@@ -121,10 +121,10 @@ async fn main() -> Result<(), bedrock::Error> {
         }
         None => {
             info!("Không có lệnh được chỉ định, hiển thị tin nhắn chào mừng");
-            println!("Chào mừng đến với bedrock. Sử dụng `list --pending` hoặc `list --done` để bắt đầu.");
+            println!("Chào mừng đến với repository. Sử dụng `list --pending` hoặc `list --done` để bắt đầu.");
         }
     }
 
-    info!("Ứng dụng bedrock hoàn thành thành công");
+    info!("Ứng dụng repository hoàn thành thành công");
     Ok(())
 }

@@ -1,4 +1,4 @@
-#![doc = "Bedrock - Framework xây dựng các ứng dụng lưu trữ hiệu năng cao, có khả năng xử lý hàng tỷ bản ghi."]
+#![doc = "repository - Framework xây dựng các ứng dụng lưu trữ hiệu năng cao, có khả năng xử lý hàng tỷ bản ghi."]
 #![doc = "Framework này được thiết kế với kiến trúc thanh lịch cho phép tái sử dụng và mở rộng, tuân thủ triết lý định danh một từ đơn."]
 #![doc = "Nó sử dụng một lớp lưu trữ trừu tượng, triển khai ban đầu với Sled, và có khả năng quan sát sâu nhờ framework `tracing`."]
 

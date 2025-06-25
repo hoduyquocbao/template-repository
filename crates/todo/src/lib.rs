@@ -5,7 +5,7 @@
 //! thuận lợi cho việc thao tác với các đối tượng Todo.
 
 use serde::{Deserialize, Serialize};
-use bedrock::{Storage, Id, Error, Entity, Query, Key};
+use repository::{Storage, Id, Error, Entity, Query, Key};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, instrument, debug, warn};
 
@@ -136,7 +136,7 @@ pub fn now() -> u128 {
 /// # Ví dụ
 ///
 /// ```rust
-/// # use bedrock::{Sled, Storage, add, Error};
+/// # use repository::{Sled, Storage, add, Error};
 /// # use tempfile::tempdir;
 /// #
 /// # #[tokio::main]
@@ -196,7 +196,7 @@ pub async fn add<S: Storage>(store: &S, text: String) -> Result<Todo, Error> {
 /// # Ví dụ
 ///
 /// ```rust
-/// # use bedrock::{Sled, Storage, add, find, Error, Id};
+/// # use repository::{Sled, Storage, add, find, Error, Id};
 /// # use tempfile::tempdir;
 /// #
 /// # #[tokio::main]
@@ -311,7 +311,7 @@ pub async fn bulk<S: Storage>(store: &S, iter: impl Iterator<Item = Todo> + Send
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bedrock::sled::Sled;
+    use repository::sled::Sled;
     use tokio::runtime::Runtime;
 
     fn memory() -> Sled {

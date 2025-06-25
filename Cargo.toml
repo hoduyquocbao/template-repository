@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/bedrock", "crates/todo"] 
+members = ["crates/repository", "crates/todo"] 
 
 resolver = "2"
 

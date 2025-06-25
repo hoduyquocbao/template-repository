@@ -2,7 +2,7 @@
 
 use once_cell::sync::Lazy; // Sử dụng once_cell để khởi tạo runtime một lần
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, BatchSize, PlotConfiguration, AxisScale, Bencher};
-use bedrock::{self, Sled, Id, Error,  Storage}; 
+use repository::{self, Sled, Id, Error,  Storage}; 
 use tempfile::tempdir; 
 use todo::{Summary, Todo, Patch};
 use tokio::runtime::{Runtime, Builder};
