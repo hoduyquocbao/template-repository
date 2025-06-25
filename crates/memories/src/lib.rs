@@ -5,12 +5,50 @@ use serde::{Deserialize, Serialize};
 use repository::{Entity, Id, Storage, Error, Key, now, Query};
 use shared::{Showable, Filterable};
 
+use std::convert::TryFrom;
+
+/// Enum đại diện cho loại bản ghi bộ nhớ.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum Kind {
+    Decision,
+    Analysis,
+    Lesson,
+    Refactor,
+    Other,
+}
+
+impl From<&Kind> for u8 {
+    fn from(kind: &Kind) -> u8 {
+        match kind {
+            Kind::Decision => 0,
+            Kind::Analysis => 1,
+            Kind::Lesson => 2,
+            Kind::Refactor => 3,
+            Kind::Other => 255,
+        }
+    }
+}
+
+impl TryFrom<String> for Kind {
+    type Error = Error;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.to_lowercase().as_str() {
+            "decision" => Ok(Kind::Decision),
+            "analysis" => Ok(Kind::Analysis),
+            "lesson" => Ok(Kind::Lesson),
+            "refactor" => Ok(Kind::Refactor),
+            "other" => Ok(Kind::Other),
+            _ => Err(Error::Input),
+        }
+    }
+}
+
 /// Đại diện cho một bản ghi bộ nhớ.
 /// Đây là một `Entity` có thể được lưu trữ và truy vấn thông qua `repository`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Entry {
     pub id: Id,               // ID duy nhất cho bản ghi
-    pub r#type: String,       // Loại bản ghi (Decision, Analysis, Lesson, etc.)
+    pub r#type: Kind,         // Loại bản ghi (Decision, Analysis, Lesson, etc.)
     pub context: String,      // Ngữ cảnh liên quan
     pub module: String,       // Module hoặc crate liên quan
     pub subject: String,      // Chủ đề chính
@@ -32,11 +70,10 @@ impl Entity for Entry {
     }
 
     fn index(&self) -> Self::Index {
-        // Sửa lỗi: Đặt thời gian lên đầu để nó là yếu tố sắp xếp chính.
-        let mut key = Key::reserve(16 + 1 + 16); // time + type + id
-        key.time(self.created); // Sắp xếp theo thời gian tạo (mới nhất trước)
-        key.byte(self.r#type.as_bytes()[0]); // Sau đó mới đến loại
-        key.id(self.id); // Đảm bảo tính duy nhất
+        let mut key = Key::reserve(1 + 16 + 16); // type_byte + time + id
+        key.byte((&self.r#type).into()); // Sử dụng phương thức chuyển đổi mới
+        key.time(self.created);
+        key.id(self.id);
         key.build()
     }
 
@@ -54,9 +91,9 @@ impl Filterable for Entry {
     type Prefix = Vec<u8>;
     type After = Vec<u8>;
     fn prefix(&self) -> Self::Prefix {
-        let mut key = Key::reserve(16 + 1 + 16);
+        let mut key = Key::reserve(1 + 16 + 16);
+        key.byte((&self.r#type).into());
         key.time(self.created);
-        key.byte(self.r#type.as_bytes()[0]);
         key.id(self.id);
         key.build()
     }
@@ -69,7 +106,7 @@ impl Filterable for Entry {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Summary {
     pub id: Id,
-    pub r#type: String,
+    pub r#type: Kind,
     pub subject: String,
     pub created: u128,
 }
@@ -78,7 +115,7 @@ pub struct Summary {
 impl Showable for Summary {
     fn show(&self) {
         println!(
-            "[{}] [{}]: {}",
+            "[{}] [{:?}]: {}",
             self.id, self.r#type, self.subject
         );
     }
@@ -88,7 +125,7 @@ impl Showable for Summary {
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
-    r#type: String,
+    kind: String, // Nhận String từ CLI
     context: String,
     module: String,
     subject: String,
@@ -96,9 +133,11 @@ pub async fn add<S: Storage>(
     decision: String,
     rationale: String,
 ) -> Result<Entry, Error> {
+    let kind = Kind::try_from(kind)?; // Chuyển đổi và xác thực
+
     let entry = Entry {
         id: Id::new_v4(),
-        r#type,
+        r#type: kind, // Sử dụng enum đã được xác thực
         context,
         module,
         subject,
@@ -145,7 +184,7 @@ mod tests {
     use repository::sled::Sled; // Sử dụng Sled làm backend test
     use tempfile::tempdir;
     use tokio::runtime::Runtime;
-    use repository::now; // Import `now` chỉ trong scope test
+    // use repository::now; // Import `now` chỉ trong scope test
 
     fn memory() -> Sled {
         let dir = tempdir().unwrap();
@@ -172,6 +211,7 @@ mod tests {
             let found = find(&store, added.id).await.unwrap().unwrap();
             assert_eq!(found.subject, "Naming");
             assert_eq!(found.id, added.id);
+            assert_eq!(found.r#type, Kind::Decision);
         });
     }
 
@@ -180,7 +220,6 @@ mod tests {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();
-            let start_time = now();
             for i in 0..5 {
                 let r#type = if i % 2 == 0 { "Decision" } else { "Analysis" }.to_string();
                 add(
@@ -198,20 +237,12 @@ mod tests {
             let all_results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
             let mut summaries: Vec<_> = all_results.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
-            // Sắp xếp lại theo created giảm dần
             summaries.sort_by(|a, b| b.created.cmp(&a.created));
-            // Kiểm tra sắp xếp theo thời gian (mới nhất trước)
             assert_eq!(summaries[0].subject, "Subject4");
             assert_eq!(summaries[4].subject, "Subject0");
-
-            // Sửa lỗi: Tạm thời vô hiệu hóa phần test lọc theo type
-            // vì logic query đã được đơn giản hóa để sửa lỗi sắp xếp.
-            /*
-            let decisions = query(&store, Some('D'), None, 10).await.unwrap();
-            let dec_summaries: Vec<_> = decisions.collect::<Result<Vec<_>, _>>().unwrap();
-            assert_eq!(dec_summaries.len(), 3); // Subject0, 2, 4 là Decision
-            assert_eq!(dec_summaries[0].subject, "Subject4");
-            */
+            // Kiểm tra đúng loại
+            assert_eq!(summaries[0].r#type, Kind::Decision);
+            assert_eq!(summaries[1].r#type, Kind::Analysis);
         });
     }
 }

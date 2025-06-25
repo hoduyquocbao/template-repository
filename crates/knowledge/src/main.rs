@@ -130,9 +130,9 @@ enum Memories { // ĐÃ ĐỔI TÊN
     },
     /// Liệt kê các bản ghi bộ nhớ
     List {
-        /// Lọc theo loại (ví dụ: 'D' cho Decision, 'A' cho Analysis)
+        /// Lọc theo loại (ví dụ: 'Decision', 'Analysis')
         #[arg(long)]
-        r#type: Option<char>,
+        r#type: Option<String>,
         /// Số lượng tối đa hiển thị
         #[arg(short, long, default_value = "10")]
         limit: usize,
@@ -209,7 +209,7 @@ async fn main() -> Result<(), repository::Error> {
                         created: repository::now(),
                     },
                 ).await?;
-                println!("Đã thêm/cập nhật: [{}:{}:{}] {}", entry.context, entry.module, entry.r#type, entry.name);
+                println!("Đã thêm/cập nhật: [{}:{}:{}] {:?}", entry.context, entry.module, entry.r#type, entry.name);
             }
             Architecture::Get { // Cập nhật tên enum
                 context,
@@ -222,7 +222,7 @@ async fn main() -> Result<(), repository::Error> {
                     Some(entry) => {
                         println!("Context: {}", entry.context);
                         println!("Module: {}", entry.module);
-                        println!("Type: {}", entry.r#type);
+                        println!("Type: {:?}", entry.r#type);
                         println!("Name: {}", entry.name);
                         println!("Responsibility: {}", entry.responsibility);
                         println!("Dependency: {}", entry.dependency);
@@ -277,13 +277,13 @@ async fn main() -> Result<(), repository::Error> {
                     decision,
                     rationale,
                 ).await?;
-                println!("Đã thêm bộ nhớ: [{}] [{}]: {}", entry.id, entry.r#type, entry.subject);
+                println!("Đã thêm bộ nhớ: [{}] [{:?}]: {}", entry.id, entry.r#type, entry.subject);
             }
             Memories::Get { id } => { // Cập nhật tên enum
                 match memories::get(&store, id).await? {
                     Some(entry) => {
                         println!("ID: {}", entry.id);
-                        println!("Type: {}", entry.r#type);
+                        println!("Type: {:?}", entry.r#type);
                         println!("Context: {}", entry.context);
                         println!("Module: {}", entry.module);
                         println!("Subject: {}", entry.subject);

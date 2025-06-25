@@ -40,9 +40,9 @@ enum Commands {
     },
     /// Liệt kê các bản ghi bộ nhớ
     List {
-        /// Lọc theo loại (ví dụ: 'D' cho Decision, 'A' cho Analysis)
+        /// Lọc theo loại (ví dụ: 'Decision', 'Analysis')
         #[arg(long)]
-        prefix: Option<char>,
+        r#type: Option<String>,
         /// Số lượng tối đa hiển thị
         #[arg(short, long, default_value = "10")]
         limit: usize,
@@ -59,7 +59,7 @@ where
         match result {
             Ok(summary) => {
                 println!(
-                    "[{}] [{}]: {}",
+                    "[{}] [{:?}]: {}",
                     summary.id, summary.r#type, summary.subject
                 );
                 count += 1;
@@ -105,14 +105,14 @@ async fn main() -> Result<(), repository::Error> {
                 decision,
                 rationale,
             ).await?;
-            println!("[{}] [{}]: {}", entry.id, entry.r#type, entry.subject);
+            println!("[{}] [{:?}]: {}", entry.id, entry.r#type, entry.subject);
         }
         Some(Commands::Get { id }) => {
             info!(%id, "Đang xử lý lệnh lấy bản ghi bộ nhớ");
             match memories::find(&store, id).await? {
                 Some(entry) => {
                     println!("ID: {}", entry.id);
-                    println!("Type: {}", entry.r#type);
+                    println!("Type: {:?}", entry.r#type);
                     println!("Context: {}", entry.context);
                     println!("Module: {}", entry.module);
                     println!("Subject: {}", entry.subject);
@@ -126,8 +126,15 @@ async fn main() -> Result<(), repository::Error> {
                 }
             }
         }
-        Some(Commands::List { prefix, limit }) => {
-            let prefix_vec = prefix.map_or(Vec::new(), |c| vec![c as u8]);
+        Some(Commands::List { r#type, limit }) => {
+            let prefix_vec = match r#type {
+                Some(kind) => {
+                    let kind = memories::Kind::try_from(kind)?;
+                    vec![(&kind).into()]
+                }
+                None => Vec::new(),
+            };
+            info!(prefix = ?prefix_vec, "Đang xử lý lệnh liệt kê bản ghi bộ nhớ");
             let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
             let result = memories::query(&store, query).await?;
             print(result)?;

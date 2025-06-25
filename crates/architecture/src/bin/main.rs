@@ -131,7 +131,7 @@ async fn main() -> Result<(), repository::Error> {
                 created: repository::now(), // Sử dụng now() từ repository
             };
             architecture::add(&store, entry.clone()).await?;
-            println!("Đã thêm/cập nhật: [{}:{}:{}] {}", entry.context, entry.module, entry.r#type, entry.name);
+            println!("Đã thêm/cập nhật: [{}:{}:{}] {:?}", entry.context, entry.module, entry.r#type, entry.name);
         }
         Some(Commands::Get {
             context,
@@ -145,7 +145,7 @@ async fn main() -> Result<(), repository::Error> {
                 Some(entry) => {
                     println!("Context: {}", entry.context);
                     println!("Module: {}", entry.module);
-                    println!("Type: {}", entry.r#type);
+                    println!("Type: {:?}", entry.r#type);
                     println!("Name: {}", entry.name);
                     println!("Responsibility: {}", entry.responsibility);
                     println!("Dependency: {}", entry.dependency);

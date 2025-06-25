@@ -241,7 +241,6 @@ mod tests {
     use repository::sled::Sled;
     use tokio::runtime::Runtime;
     use tempfile::tempdir;
-    use shared;
 
     fn memory() -> Sled {
         let dir = tempdir().unwrap();

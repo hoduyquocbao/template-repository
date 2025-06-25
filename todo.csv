@@ -10,3 +10,4 @@ ID,Context,Module,Task,Priority,Status,Assignee,Due,Notes
 "task-009","Refactor","repository","Sửa các vi phạm quy tắc đặt tên trong hằng số và test.","Medium","Done","Guardian","","Đã sửa các hằng số, test, sạch clippy."
 "task-010","Refactor","todo/examples","Sửa các vi phạm quy tắc đặt tên trong code ví dụ.","Medium","Done","Guardian","","Đã chuẩn hóa ví dụ, tuân thủ quy tắc một từ, sạch clippy."
 "task-011","Refactor","System","Hoàn thiện refactor, test, benchmark, enum, truyền kiểu, truy vấn, sạch lint, sạch warning, không còn nợ kỹ thuật.","High","Done","Guardian","","Codebase đạt trạng thái thanh lịch, rõ ràng, dễ bảo trì."
+"task-012","Refactor","memories","Implement type-safe enum-based indexing for memories crate","High","Done","Guardian","","Đã refactor memories sang enum Kind, chuẩn hóa index, codebase sạch lint, test pass, kiến trúc nhất quán."

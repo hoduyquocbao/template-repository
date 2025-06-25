@@ -1,12 +1,12 @@
 //! Module quản lý các bản ghi bộ nhớ thông qua `memories` crate.
 
 use repository::{Error, Storage, Id};
-use memories::{self, Entry}; // Chỉ import Mem, không import Summary
+use memories::{self, Entry, Kind}; // Import thêm Kind
 use shared;
 
 #[derive(Debug, Clone)]
 pub struct Add {
-    pub r#type: String,
+    pub r#type: String, // Giữ nguyên String cho dữ liệu truyền từ CLI
     pub context: String,
     pub module: String,
     pub subject: String,
@@ -21,7 +21,7 @@ pub struct Add {
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
-    r#type: String,
+    kind: String, // Nhận String từ CLI
     context: String,
     module: String,
     subject: String,
@@ -31,7 +31,7 @@ pub async fn add<S: Storage>(
 ) -> Result<memories::Entry, repository::Error> {
     memories::add(
         store,
-        r#type,
+        kind,
         context,
         module,
         subject,
@@ -51,10 +51,16 @@ pub async fn get<S: Storage>(store: &S, id: Id) -> Result<Option<Entry>, Error> 
 /// Mục đích: Cung cấp giao diện `list` cho `knowledge` CLI.
 pub async fn list<S: Storage>(
     store: &S,
-    prefix: Option<char>,
+    kind: Option<String>,
     limit: usize,
 ) -> Result<Box<dyn Iterator<Item = Result<memories::Summary, repository::Error>> + Send>, repository::Error> {
-    let prefix_vec = prefix.map_or(Vec::new(), |c| vec![c as u8]);
+    let prefix_vec = match kind {
+        Some(s) => {
+            let kind = Kind::try_from(s)?;
+            vec![(&kind).into()]
+        }
+        None => Vec::new(),
+    };
     let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
     memories::query(store, query).await
 }
