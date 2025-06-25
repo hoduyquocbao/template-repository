@@ -2,6 +2,7 @@
 
 use repository::{Error, Storage, Id};
 use memories::{self, Entry}; // Chỉ import Mem, không import Summary
+use shared;
 
 #[derive(Debug, Clone)]
 pub struct Add {
@@ -17,19 +18,27 @@ pub struct Add {
 
 /// Thêm một bản ghi bộ nhớ mới.
 /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
-pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
-    let result = memories::add(
+#[allow(clippy::too_many_arguments)]
+pub async fn add<S: Storage>(
+    store: &S,
+    r#type: String,
+    context: String,
+    module: String,
+    subject: String,
+    description: String,
+    decision: String,
+    rationale: String,
+) -> Result<memories::Entry, repository::Error> {
+    memories::add(
         store,
-        args.r#type,
-        args.context,
-        args.module,
-        args.subject,
-        args.description,
-        args.decision,
-        args.rationale,
-        args.created,
-    ).await?;
-    Ok(result)
+        r#type,
+        context,
+        module,
+        subject,
+        description,
+        decision,
+        rationale,
+    ).await
 }
 
 /// Lấy một bản ghi bộ nhớ bằng ID.
@@ -42,8 +51,10 @@ pub async fn get<S: Storage>(store: &S, id: Id) -> Result<Option<Entry>, Error> 
 /// Mục đích: Cung cấp giao diện `list` cho `knowledge` CLI.
 pub async fn list<S: Storage>(
     store: &S,
-    r#type: Option<char>,
+    prefix: Option<char>,
     limit: usize,
-) -> Result<Box<dyn Iterator<Item = Result<memories::Summary, Error>> + Send>, Error> { // Sử dụng memories::Summary đầy đủ
-    memories::query(store, r#type, None, limit).await
+) -> Result<Box<dyn Iterator<Item = Result<memories::Summary, repository::Error>> + Send>, repository::Error> {
+    let prefix_vec = prefix.map_or(Vec::new(), |c| vec![c as u8]);
+    let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
+    memories::query(store, query).await
 }

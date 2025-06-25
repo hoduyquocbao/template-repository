@@ -2,7 +2,7 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Id, Storage, Error, Key};
+use repository::{Entity, Id, Storage, Error, Key, now, Query};
 use shared::{Showable, Filterable};
 
 /// Đại diện cho một bản ghi bộ nhớ.
@@ -84,7 +84,7 @@ impl Showable for Summary {
     }
 }
 
-/// Tạo và thêm một bản ghi bộ nhớ mới.
+/// Tạo và thêm một bản ghi bộ nhớ mới. created được tự động sinh.
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
@@ -95,7 +95,6 @@ pub async fn add<S: Storage>(
     description: String,
     decision: String,
     rationale: String,
-    created: u128,
 ) -> Result<Entry, Error> {
     let entry = Entry {
         id: Id::new_v4(),
@@ -106,7 +105,7 @@ pub async fn add<S: Storage>(
         description,
         decision,
         rationale,
-        created,
+        created: now(),
     };
     let result = entry.clone();
     store.insert(entry).await?;
@@ -133,19 +132,11 @@ pub async fn remove<S: Storage>(store: &S, id: Id) -> Result<Entry, Error> {
     store.delete::<Entry>(id).await
 }
 
-/// Truy vấn các bản ghi bộ nhớ.
-pub async fn query<S: Storage>(store: &S, _type: Option<char>, after: Option<(u128, Id)>, limit: usize)
+/// Truy vấn các bản ghi bộ nhớ. Nhận repository::Query<Vec<u8>>
+pub async fn query<S: Storage>(store: &S, query: Query<Vec<u8>>)
     -> Result<Box<dyn Iterator<Item = Result<Summary, Error>> + Send>, Error>
 {
-    let prefix = Vec::new();
-    let after_bytes = after.map(|(created, id)| {
-        let mut key = Key::reserve(16 + 1 + 16);
-        key.time(created);
-        key.id(id);
-        key.build()
-    });
-    let query_obj = shared::query(prefix, after_bytes, limit);
-    store.query::<Entry>(query_obj).await
+    store.query::<Entry>(query).await
 }
 
 #[cfg(test)]
@@ -176,7 +167,6 @@ mod tests {
                 "Use single words".to_string(),
                 "Standard".to_string(),
                 "Clarity".to_string(),
-                now(),
             ).await.unwrap();
 
             let found = find(&store, added.id).await.unwrap().unwrap();
@@ -202,11 +192,10 @@ mod tests {
                     "Desc".to_string(),
                     "Dec".to_string(),
                     "Rat".to_string(),
-                    start_time + i as u128,
                 ).await.unwrap();
             }
 
-            let all_results = query(&store, None, None, 10).await.unwrap();
+            let all_results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
             let summaries: Vec<_> = all_results.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
             // Kiểm tra sắp xếp theo thời gian (mới nhất trước)

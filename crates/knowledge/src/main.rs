@@ -267,16 +267,13 @@ async fn main() -> Result<(), repository::Error> {
             } => {
                 let entry = memories::add(
                     &store,
-                    memories::Add {
-                        r#type,
-                        context,
-                        module,
-                        subject,
-                        description,
-                        decision,
-                        rationale,
-                        created: repository::now(),
-                    },
+                    r#type,
+                    context,
+                    module,
+                    subject,
+                    description,
+                    decision,
+                    rationale,
                 ).await?;
                 println!("Đã thêm bộ nhớ: [{}] [{}]: {}", entry.id, entry.r#type, entry.subject);
             }

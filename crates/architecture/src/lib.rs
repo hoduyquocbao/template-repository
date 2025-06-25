@@ -2,7 +2,7 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Storage, Error, Key, now};
+use repository::{Entity, Storage, Error, Key, now, Query};
 use shared::{Showable, Filterable};
 
 /// Đại diện cho một bản ghi kiến trúc.
@@ -22,23 +22,17 @@ pub struct Entry {
 }
 
 impl Entity for Entry {
-    const NAME: &'static str = "architecture"; // Tên tree trong Sled
-    type Key = String; // Key duy nhất là sự kết hợp của các trường
-    type Index = Vec<u8>; // Index để sắp xếp/truy vấn
+    const NAME: &'static str = "architecture";
+    type Key = String;
+    type Index = Vec<u8>;
     type Summary = Summary;
 
     fn key(&self) -> Self::Key {
-        // Tạo key tổng hợp duy nhất
         format!("{}:{}:{}:{}", self.context, self.module, self.r#type, self.name)
     }
 
     fn index(&self) -> Self::Index {
-        // Sử dụng Key builder để tạo index cho truy vấn hiệu quả
-        let mut key = Key::reserve(Entity::key(self).len() + 16);
-        key.byte(1); // Flag cho bản ghi sống (không bị xóa logic)
-        key.time(self.created); // Sắp xếp theo thời gian tạo (mới nhất trước)
-        key.byte(self.r#type.as_bytes()[0]); // Ví dụ: index theo loại
-        key.build()
+        self.key().into_bytes()
     }
 
     fn summary(&self) -> Self::Summary {
@@ -85,37 +79,11 @@ impl Showable for Summary {
     }
 }
 
-/// Thêm một bản ghi kiến trúc mới. Nếu key đã tồn tại, nó sẽ cập nhật (upsert).
-pub async fn add<S: Storage>(store: &S, new_entry: Entry) -> Result<Entry, Error> {
-    let key = Entity::key(&new_entry);
-    // Sửa lỗi move: Clone `new_entry` để `update_data` được move vào closure,
-    // trong khi `new_entry` gốc vẫn có thể được sử dụng sau đó.
-    let update_data = new_entry.clone();
-
-    // Thử cập nhật, nếu không tồn tại thì insert.
-    // `key` được move vào hàm `update`.
-    let result = store.update::<Entry, _>(key, move |mut entry| {
-        // Đây là logic khi update: giữ lại created, cập nhật các trường khác
-        entry.responsibility = update_data.responsibility;
-        entry.dependency = update_data.dependency;
-        entry.performance = update_data.performance;
-        entry.naming = update_data.naming;
-        entry.prompt = update_data.prompt;
-        entry // Trả về entry đã update
-    }).await;
-
-    match result {
-        Ok(entry) => Ok(entry), // Đã cập nhật thành công
-        Err(Error::Missing) => {
-            // Không tìm thấy, nên insert mới. `new_entry` vẫn hợp lệ ở đây.
-            let final_entry = Entry { created: now(), ..new_entry };
-            // Sửa lỗi logic: `insert` không trả về gì, nên ta clone `final_entry` để insert
-            // và trả về `final_entry` gốc.
-            store.insert(final_entry.clone()).await?;
-            Ok(final_entry)
-        },
-        Err(e) => Err(e), // Lỗi khác
-    }
+/// Thêm một bản ghi kiến trúc mới. Chỉ insert, không upsert.
+pub async fn add<S: Storage>(store: &S, mut new_entry: Entry) -> Result<Entry, Error> {
+    new_entry.created = now();
+    store.insert(new_entry.clone()).await?;
+    Ok(new_entry)
 }
 
 /// Tìm một bản ghi kiến trúc bằng key.
@@ -136,12 +104,11 @@ pub async fn remove<S: Storage>(store: &S, key: String) -> Result<Entry, Error> 
     store.delete::<Entry>(key).await
 }
 
-/// Truy vấn các bản ghi kiến trúc.
-pub async fn query<S: Storage>(store: &S, prefix: Vec<u8>, after: Option<Vec<u8>>, limit: usize)
+/// Truy vấn các bản ghi kiến trúc. Nhận repository::Query<Vec<u8>>
+pub async fn query<S: Storage>(store: &S, query: Query<Vec<u8>>)
     -> Result<Box<dyn Iterator<Item = Result<Summary, Error>> + Send>, Error>
 {
-    let query_obj = shared::query(prefix, after, limit);
-    store.query::<Entry>(query_obj).await
+    store.query::<Entry>(query).await
 }
 
 #[cfg(test)]
@@ -222,7 +189,7 @@ mod tests {
                 add(&store, entry).await.unwrap();
             }
 
-            let results = query(&store, Vec::new(), None, 10).await.unwrap();
+            let results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
             let summaries: Vec<_> = results.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
             // Kiểm tra thứ tự sắp xếp (mới nhất trước theo created timestamp)

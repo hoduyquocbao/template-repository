@@ -178,8 +178,8 @@ async fn main() -> Result<(), repository::Error> {
         }
         Some(Commands::List { prefix, limit }) => {
             info!(%prefix, %limit, "Đang xử lý lệnh liệt kê bản ghi kiến trúc");
-            let query_prefix_bytes = prefix.as_bytes().to_vec();
-            let result = architecture::query(&store, query_prefix_bytes, None, limit).await?;
+            let query = shared::query(prefix.into_bytes(), None::<Vec<u8>>, limit);
+            let result = architecture::query(&store, query).await?;
             print(result)?;
         }
         None => {

@@ -42,7 +42,7 @@ enum Commands {
     List {
         /// Lọc theo loại (ví dụ: 'D' cho Decision, 'A' cho Analysis)
         #[arg(long)]
-        r#type: Option<char>,
+        prefix: Option<char>,
         /// Số lượng tối đa hiển thị
         #[arg(short, long, default_value = "10")]
         limit: usize,
@@ -104,7 +104,6 @@ async fn main() -> Result<(), repository::Error> {
                 description,
                 decision,
                 rationale,
-                repository::now(),
             ).await?;
             println!("[{}] [{}]: {}", entry.id, entry.r#type, entry.subject);
         }
@@ -127,9 +126,10 @@ async fn main() -> Result<(), repository::Error> {
                 }
             }
         }
-        Some(Commands::List { r#type, limit }) => {
-            info!(?r#type, %limit, "Đang xử lý lệnh liệt kê bản ghi bộ nhớ");
-            let result = memories::query(&store, r#type, None, limit).await?;
+        Some(Commands::List { prefix, limit }) => {
+            let prefix_vec = prefix.map_or(Vec::new(), |c| vec![c as u8]);
+            let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
+            let result = memories::query(&store, query).await?;
             print(result)?;
         }
         None => {

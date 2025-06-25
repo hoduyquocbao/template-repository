@@ -2,6 +2,7 @@
 
 use repository::{Error, Storage};
 use architecture::{self, Entry}; // Chỉ import Arch, không import Summary hay đổi tên
+use shared;
 
 #[derive(Debug, Clone)]
 pub struct Add {
@@ -68,7 +69,7 @@ pub async fn list<S: Storage>(
     store: &S,
     prefix: String,
     limit: usize,
-) -> Result<Box<dyn Iterator<Item = Result<architecture::Summary, Error>> + Send>, Error> { // SỬ DỤNG architecture::Summary ĐẦY ĐỦ
-    let query_prefix_bytes = prefix.as_bytes().to_vec();
-    architecture::query(store, query_prefix_bytes, None, limit).await
+) -> Result<Box<dyn Iterator<Item = Result<architecture::Summary, repository::Error>> + Send>, repository::Error> {
+    let query = shared::query(prefix.into_bytes(), None::<Vec<u8>>, limit);
+    architecture::query(store, query).await
 }
