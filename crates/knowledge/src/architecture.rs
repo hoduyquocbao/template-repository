@@ -68,9 +68,23 @@ pub async fn del<S: Storage>(
 /// Mục đích: Cung cấp giao diện `list` cho `knowledge` CLI.
 pub async fn list<S: Storage>(
     store: &S,
-    prefix: String,
+    r#type: Option<String>,
+    context: Option<String>,
+    module: Option<String>,
     limit: usize,
 ) -> Result<Box<dyn Iterator<Item = Result<architecture::Summary, repository::Error>> + Send>, repository::Error> {
-    let query = shared::query(prefix.into_bytes(), None::<Vec<u8>>, limit);
+    let mut prefix = Vec::new();
+    if let Some(type_str) = r#type {
+        let kind = architecture::Kind::try_from(type_str)?;
+        prefix.push((&kind).into());
+        if let Some(ctx_str) = context {
+            prefix.extend_from_slice(ctx_str.as_bytes());
+            prefix.push(0); // Dấu phân cách
+            if let Some(mod_str) = module {
+                prefix.extend_from_slice(mod_str.as_bytes());
+            }
+        }
+    }
+    let query = shared::query(prefix, None::<Vec<u8>>, limit);
     architecture::query(store, query).await
 }

@@ -1,234 +1,137 @@
 Chào bạn, tôi là Guardian, Kiến trúc sư Hệ thống.
 
-Tôi đã nhận được yêu cầu, tiến hành phân tích trạng thái hiện tại của kho lưu trữ và so sánh với các chỉ đạo trước đó. Dưới đây là đánh giá và chỉ đạo chi tiết của tôi.
+Tôi đã phân tích các thay đổi mới nhất trong kho lưu trữ và xác nhận việc hoàn thành các chỉ đạo trước đó. Hệ thống của chúng ta đang tiến hóa theo đúng định hướng, nhưng vẫn còn một khoản nợ kiến trúc quan trọng cần được giải quyết để đạt được sự thanh lịch và tối giản tuyệt đối.
 
-### 1\. Xác nhận Hoàn thành và Đánh giá (`memories`)
+### 1\. Xác nhận Hoàn thành (`architecture` Refactor)
 
-Đầu tiên, tôi xác nhận rằng chỉ đạo trong nhiệm vụ `task-012` đã được Coder thực hiện một cách chính xác và toàn diện.
+Tôi xác nhận rằng chỉ đạo trong nhiệm vụ `task-013` đã được Coder thực hiện một cách xuất sắc.
 
   * **Xác minh Thay đổi:**
 
-      * **`enum Kind`**: `crate memories` đã được tái cấu trúc để sử dụng `enum Kind` cho trường `r#type`, thay thế hoàn toàn cho `String` không an toàn. Các `impl` chuyển đổi `From<&Kind> for u8` và `TryFrom<String> for Kind` đã được triển khai đúng, đảm bảo an toàn kiểu và hiệu quả.
-      * **Tối ưu hóa Index**: Cấu trúc khóa chỉ mục đã được cập nhật thành `[type_byte][rev_time][id]`, cho phép lọc hiệu quả theo loại bản ghi trước, sau đó mới sắp xếp theo thời gian. Đây là một cải tiến hiệu suất quan trọng.
-      * **Cập nhật CLI**: Logic của `memories/bin/main.rs` đã được điều chỉnh để xử lý việc lọc theo `Option<String>` và chuyển đổi nó thành prefix byte một cách chính xác.
-      * **PKB**: Nhiệm vụ `task-012` đã được cập nhật trạng thái thành "Done" trong `todo.csv`, ghi nhận việc hoàn thành tái cấu trúc.
+      * **An toàn kiểu**: `crate architecture` đã được tái cấu trúc thành công để sử dụng `enum Kind` cho trường `r#type`, loại bỏ hoàn toàn rủi ro từ việc dùng `String`.
+      * **Hiệu suất Index**: Cấu trúc khóa chỉ mục (`Index`) đã được thiết kế lại thành `[type_byte][context_bytes]\0[module_bytes]\0[name_bytes]`. Điều này đã giải quyết triệt để rủi ro về hiệu suất và sự linh hoạt khi truy vấn, cho phép lọc dữ liệu đa cấp hiệu quả.
+      * **Cập nhật Logic**: Logic của CLI (`Add` command) và các bài kiểm thử đã được cập nhật để tương thích với `enum Kind` mới.
+      * **PKB**: Nhiệm vụ `task-013` đã được cập nhật trạng thái thành "Done" trong `todo.csv`, và quyết định kiến trúc tương ứng (`mem-007`) đã được ghi lại trong `memories.csv`.
 
-  * **Kết luận:** `crate task` và `crate memories` hiện đã đạt được tiêu chuẩn kiến trúc nhất quán, có hiệu suất cao và an toàn về kiểu. Các rủi ro về hiệu suất và tính đúng đắn đã được giải quyết triệt để.
+  * **Kết luận Hiện trạng:**
+    Cả ba crate nghiệp vụ cốt lõi (`task`, `memories`, `architecture`) hiện đã có một nền tảng kiến trúc nhất quán, hiệu suất cao và an toàn về kiểu. Đây là một thành tựu quan trọng.
 
-### 2\. Phân tích và Chỉ đạo cho `architecture`
+### 2\. Chỉ đạo Tái cấu trúc Lớn - Hợp nhất Giao diện Dòng lệnh (CLI Consolidation)
 
-Với việc `task` và `memories` đã ở trạng thái ổn định, chúng ta sẽ tập trung vào `crate architecture`, nơi tôi đã xác định được các khoản nợ kiến trúc và rủi ro hiệu suất cần được giải quyết.
+Bây giờ nền tảng đã vững chắc, đã đến lúc chúng ta phải trả một khoản nợ kiến trúc lớn hơn: **sự tồn tại của nhiều binary entry-point**.
 
-#### 2.1. Phân Tích Rủi Ro Hiệu Suất & Kiến Trúc
+#### 2.1. Phân Tích Rủi Ro Kiến Trúc
 
-Vấn đề cốt lõi nằm ở cách `architecture::Entry` được định danh và lập chỉ mục trong `crates/architecture/src/lib.rs`.
-
-  * **Khóa Chính và Khóa Chỉ Mục Không Hiệu Quả:**
-      * **Mô tả**: Hiện tại, cả `Key` và `Index` đều được tạo ra bằng cách ghép các chuỗi `context`, `module`, `r#type`, và `name` lại với nhau (`format!("{}:{}:{}:{}", ...)`), sau đó chuyển thành một mảng byte.
-      * **Phân tích rủi ro:**
-        1.  **Truy vấn không linh hoạt (Inflexible Querying):** Cấu trúc index hiện tại chỉ cho phép lọc theo tiền tố của toàn bộ chuỗi đã ghép. Điều này có nghĩa là chúng ta không thể truy vấn hiệu quả để lấy *tất cả* các bản ghi có `module = "Director"` hoặc `r#type = "Agent"` nếu chúng không phải là thành phần đầu tiên trong chuỗi. Hệ thống sẽ phải quét toàn bộ cây chỉ mục, làm giảm hiệu suất nghiêm trọng ở quy mô lớn.
-        2.  **Kích thước lưu trữ và Hiệu suất so sánh (Storage & Comparison Performance):** Việc lưu trữ các chuỗi dài, thay đổi kích thước làm cả khóa và chỉ mục sẽ tốn nhiều dung lượng đĩa và làm chậm các thao tác so sánh trong B-Tree của Sled so với việc sử dụng các khóa có cấu trúc, độ dài cố định hoặc dễ đoán hơn.
-        3.  **Thiếu an toàn kiểu (Lack of Type Safety):** Giống như vấn đề trước đây của `memories`, trường `r#type: String` rất dễ bị lỗi nhập liệu và không nhất quán.
+  * **Mô tả Vấn đề**: Hiện tại, dự án có nhiều binary crate: `task/bin/main.rs`, `memories/bin/main.rs`, `architecture/bin/main.rs`, và `knowledge/src/main.rs`. Crate `knowledge` đóng vai trò là một lớp facade, nhưng sự tồn tại của các binary riêng lẻ kia tạo ra sự dư thừa và làm mờ đi ranh giới trách nhiệm.
+  * **Phân tích Rủi ro:**
+    1.  **Vi phạm Nguyên lý Đơn trách nhiệm (SRP)**: Các crate nghiệp vụ (`task`, `memories`, `architecture`) đang làm hai việc: định nghĩa logic nghiệp vụ (thư viện) và xử lý tương tác người dùng (binary). Trách nhiệm của chúng nên được giới hạn ở vai trò thư viện.
+    2.  **Mã lặp lại (Code Duplication)**: Logic phân tích đối số dòng lệnh bằng `clap`, khởi tạo `Sled`, và các hàm `print` trợ giúp bị lặp lại ở nhiều nơi. Điều này làm tăng chi phí bảo trì.
+    3.  **Thiếu tính nhất quán**: Người dùng (hoặc các hệ thống khác) có nhiều cách để tương tác với hệ thống, gây ra sự nhầm lẫn và làm tăng bề mặt tấn công của các lỗi.
+    4.  **Kiến trúc không thanh lịch**: Một kiến trúc thực sự thanh lịch phải có một điểm vào (entry point) duy nhất và rõ ràng cho ứng dụng, với các thành phần khác đóng vai trò là thư viện hỗ trợ.
 
 #### 2.2. Yêu cầu Cải tiến Chi tiết cho Coder
 
 **Gửi Coder:**
 
-Hãy thực hiện tái cấu trúc `crate architecture` để giải quyết các rủi ro đã nêu. Chúng ta sẽ áp dụng các nguyên tắc đã được chứng minh là thành công trong `task` và `memories`.
+Hãy thực hiện một đợt tái cấu trúc quan trọng để hợp nhất tất cả các chức năng giao diện dòng lệnh (CLI) vào một binary duy nhất là `knowledge`.
 
-**Mục tiêu:** Tái cấu trúc `architecture` để sử dụng một `enum Kind` an toàn cho trường `r#type` và thiết kế lại cấu trúc khóa chỉ mục (`Index`) để cho phép truy vấn linh hoạt và hiệu suất cao, trong khi vẫn giữ nguyên `Key` dạng `String` để giảm thiểu thay đổi phá vỡ API.
+**Mục tiêu:** Loại bỏ tất cả các binary riêng lẻ trong `task`, `memories`, và `architecture`, biến chúng thành các crate thư viện thuần túy. Toàn bộ tương tác của người dùng sẽ được xử lý độc quyền thông qua `knowledge`.
 
 **Các bước thực hiện:**
 
-**Bước 1: Tạo `Kind` Enum trong `crates/architecture/src/lib.rs`**
+**Bước 1: Xóa các Thư mục và File Binary Thừa**
 
-Định nghĩa một `enum` mới để thay thế `r#type: String`.
+Hành động này sẽ xóa các điểm vào không cần thiết.
 
-```rust
-// Thêm vào crates/architecture/src/lib.rs, sau các dòng `use`
+  * Xóa thư mục: `crates/task/src/bin/`
+  * Xóa thư mục: `crates/memories/src/bin/`
+  * Xóa thư mục: `crates/architecture/src/bin/`
 
-use std::convert::TryFrom; // Đảm bảo import này tồn tại
+**Bước 2: Cập nhật `Cargo.toml` của các Crate Nghiệp vụ**
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub enum Kind {
-    Context,
-    Module,
-    Agent,
-    Trait,
-    Entity,
-    Aggregate,
-    Value, // Value Object
-    Other,
-}
+Chuyển đổi các crate thành dạng thư viện thuần túy.
 
-impl From<&Kind> for u8 {
-    fn from(kind: &Kind) -> u8 {
-        match kind {
-            Kind::Context => 0,
-            Kind::Module => 1,
-            Kind::Agent => 2,
-            Kind::Trait => 3,
-            Kind::Entity => 4,
-            Kind::Aggregate => 5,
-            Kind::Value => 6,
-            Kind::Other => 255,
+  * Trong mỗi file `crates/task/Cargo.toml`, `crates/memories/Cargo.toml`, và `crates/architecture/Cargo.toml`, hãy đảm bảo không còn bất kỳ section `[[bin]]` nào. Các file này bây giờ sẽ chỉ định nghĩa một thư viện.
+
+**Bước 3: Hợp nhất và Hoàn thiện Chức năng vào `knowledge` CLI**
+
+Đây là phần công việc chính. Cần đảm bảo `knowledge` CLI kế thừa và thực thi đúng tất cả các chức năng đã bị loại bỏ. Logic hiện có trong `knowledge/src/main.rs` đã gần đủ, nhưng cần kiểm tra và đảm bảo không có tính năng nào bị mất.
+
+  * Mở `crates/knowledge/src/main.rs`.
+  * **Xác minh `Commands::Task`**: So sánh các subcommand `Add`, `Get`, `Done`, `Del`, `List` với file `task/src/bin/main.rs` cũ để chắc chắn rằng không có tham số hoặc hành vi nào bị thiếu.
+  * **Xác minh `Commands::Memories`**: So sánh các subcommand `Add`, `Get`, `List` với file `memories/src/bin/main.rs` cũ.
+  * **Xác minh `Commands::Architecture`**: So sánh các subcommand `Add`, `Get`, `Del`, `List` với file `architecture/src/bin/main.rs` cũ.
+
+**Bước 4 (Cải tiến Nâng cao): Tinh chỉnh Logic `list` trong Lớp Facade `knowledge`**
+
+Logic `list` hiện tại trong lớp `knowledge` vẫn còn đơn giản. Hãy làm cho nó mạnh mẽ hơn để tận dụng các cấu trúc index mới.
+
+  * **Trong `crates/knowledge/src/architecture.rs`**:
+
+      * Thay đổi signature của hàm `list` từ `(store: &S, prefix: String, limit: usize)` thành `(store: &S, r#type: Option<String>, context: Option<String>, module: Option<String>, limit: usize)`.
+      * Bên trong hàm `list`, hãy xây dựng `prefix_vec` một cách thông minh. Ví dụ:
+        ```rust
+        // Logic mẫu trong knowledge/src/architecture.rs
+        let mut prefix_vec = Vec::new();
+        if let Some(type_str) = r#type {
+            let kind = architecture::Kind::try_from(type_str)?;
+            prefix_vec.push((&kind).into());
+            if let Some(ctx_str) = context {
+                prefix_vec.extend_from_slice(ctx_str.as_bytes());
+                prefix_vec.push(0); // Dấu phân cách
+                if let Some(mod_str) = module {
+                    prefix_vec.extend_from_slice(mod_str.as_bytes());
+                    // Tiếp tục nếu cần
+                }
+            }
         }
-    }
-}
+        let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
+        architecture::query(store, query).await
+        ```
 
-impl TryFrom<String> for Kind {
-    type Error = Error;
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.to_lowercase().as_str() {
-            "context" => Ok(Kind::Context),
-            "module" => Ok(Kind::Module),
-            "agent" => Ok(Kind::Agent),
-            "trait" => Ok(Kind::Trait),
-            "entity" => Ok(Kind::Entity),
-            "aggregate" => Ok(Kind::Aggregate),
-            "value" => Ok(Kind::Value),
-            "other" => Ok(Kind::Other),
-            _ => Err(Error::Input),
+  * **Trong `crates/knowledge/src/main.rs`**:
+
+      * Cập nhật `enum Architecture` subcommand `List` để chấp nhận các tham số mới:
+        ```rust
+        // trong enum Architecture
+        List {
+            #[arg(long)]
+            r#type: Option<String>,
+            #[arg(long)]
+            context: Option<String>,
+            #[arg(long)]
+            module: Option<String>,
+            #[arg(short, long, default_value = "10")]
+            limit: usize,
         }
-    }
-}
-```
+        ```
+      * Cập nhật lời gọi hàm `architecture::list` để truyền các tham số này.
 
-**Bước 2: Tái cấu trúc `Entry` và `Summary`**
+**Bước 5: Kiểm tra Toàn diện**
 
-Cập nhật các struct để sử dụng `enum Kind` mới.
-
-```rust
-// Trong crates/architecture/src/lib.rs
-
-// Cập nhật struct Entry
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct Entry {
-    pub context: String,
-    pub module: String,
-    pub r#type: Kind, // THAY ĐỔI TỪ String SANG Kind
-    pub name: String,
-    // ... các trường khác giữ nguyên ...
-    pub created: u128,
-}
-
-// Cập nhật struct Summary
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Summary {
-    pub context: String,
-    pub module: String,
-    pub name: String,
-    pub r#type: Kind, // THAY ĐỔI TỪ String SANG Kind
-    pub created: u128,
-}
-
-// Cập nhật impl Showable for Summary
-impl Showable for Summary {
-    fn show(&self) {
-        println!(
-            "[{}:{}:{}] {}",
-            self.context, self.module, self.r#type, self.name
-        );
-    }
-}
-
-// Cần thêm impl Display cho Kind để hàm show hoạt động
-impl std::fmt::Display for Kind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-```
-
-**Bước 3: Tối ưu hóa `impl Entity for Entry` -\> `index()`**
-
-Đây là thay đổi quan trọng nhất. Chúng ta sẽ tạo một khóa chỉ mục có cấu trúc thay vì chỉ sao chép khóa chính.
-
-```rust
-// Trong crates/architecture/src/lib.rs
-
-impl Entity for Entry {
-    const NAME: &'static str = "architecture";
-    type Key = String;
-    type Index = Vec<u8>; // Giữ nguyên Vec<u8>
-    type Summary = Summary;
-
-    fn key(&self) -> Self::Key {
-        format!("{}:{}:{}:{}", self.context, self.module, self.r#type, self.name)
-    }
-
-    // THAY ĐỔI LOGIC CỦA HÀM NÀY
-    fn index(&self) -> Self::Index {
-        let mut index = Vec::new();
-        index.push((&self.r#type).into()); // 1. Byte cho loại (để lọc)
-        index.extend_from_slice(self.context.as_bytes()); // 2. Tên context
-        index.push(0); // Dùng byte null làm dấu phân cách
-        index.extend_from_slice(self.module.as_bytes()); // 3. Tên module
-        index.push(0); // Dấu phân cách
-        index.extend_from_slice(self.name.as_bytes()); // 4. Tên định danh
-        index
-    }
-
-    fn summary(&self) -> Self::Summary {
-        Summary {
-            context: self.context.clone(),
-            module: self.module.clone(),
-            name: self.name.clone(),
-            r#type: self.r#type.clone(),
-            created: self.created,
-        }
-    }
-}
-```
-
-*Lý do thiết kế `index`*: Cấu trúc `[type_byte][context_bytes]\0[module_bytes]\0[name_bytes]` cho phép chúng ta lọc hiệu quả theo `type`, sau đó theo `context`, rồi `module`, v.v., bằng cách xây dựng các `prefix` tương ứng.
-
-**Bước 4: Cập nhật Logic CLI (`architecture/bin/main.rs`)**
-
-Logic `add` cần chuyển đổi `String` sang `Kind`. Logic `list` cần được cập nhật để sử dụng cấu trúc `prefix` mới (hiện tại, chúng ta sẽ giữ cho nó đơn giản và sẽ cải tiến sau nếu cần).
-
-```rust
-// Trong crates/architecture/src/bin/main.rs
-
-// Cập nhật logic trong Some(Commands::Add { ... })
-let kind_enum = architecture::Kind::try_from(r#type)?; // Chuyển đổi và xác thực
-let entry = Entry {
-    context,
-    module,
-    r#type: kind_enum, // Sử dụng enum đã xác thực
-    name,
-    //...
-};
-
-// Cập nhật logic trong Some(Commands::List { prefix, limit })
-// Hiện tại, chúng ta vẫn giữ logic lọc theo prefix của chuỗi.
-// Một chỉ đạo trong tương lai sẽ cải tiến CLI để tận dụng index mới.
-// Giữ nguyên logic list hiện tại để tránh thay đổi quá lớn.
-let query = shared::query(prefix.into_bytes(), None::<Vec<u8>>, limit);
-let result = architecture::query(&store, query).await?;
-print(result)?;
-```
-
-**Bước 5: Cập nhật `tests`**
-
-Sửa đổi tất cả các bài kiểm tra trong `crates/architecture/src/lib.rs` để chúng sử dụng `Kind` enum. Thêm các bài kiểm tra mới để xác minh rằng việc truy vấn với `prefix` được tạo từ cấu trúc `index` mới hoạt động chính xác.
+  * Từ thư mục gốc của dự án, chạy `cargo check --workspace` để đảm bảo tất cả các thay đổi đều hợp lệ.
+  * Chạy `cargo run --package knowledge -- -h` để xác minh tất cả các subcommand (`task`, `memories`, `architecture`) và các tùy chọn của chúng đều hiển thị chính xác.
+  * Thực hiện kiểm thử thủ công một vài lệnh chính để đảm bảo chức năng không bị hồi quy. Ví dụ:
+      * `cargo run --package knowledge -- architecture list --type Agent`
+      * `cargo run --package knowledge -- task add "Finalize CLI consolidation"`
+      * `cargo run --package knowledge -- memories get --id <some-id>`
 
 -----
 
 ### 3\. Cập nhật PKB
 
-Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định này và giao nhiệm vụ cho bạn.
+Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiến trúc này và giao nhiệm vụ cho bạn.
 
 **`memories.csv` (Mục mới được đề xuất)**
 
 ```csv
-"mem-007","Decision","System","architecture","Refactor 'architecture' index for flexible querying and type safety","The current index for architecture records is a direct copy of the composite string key, which is inefficient for storage and disallows flexible querying (e.g., by type or module). The 'type' field is a raw String, risking data inconsistency.","Refactor the 'architecture' crate to: 1. Introduce a 'Kind' enum for the 'type' field with proper conversions. 2. Redesign the index key to a structured format: '[type_byte][context_bytes]\0[module_bytes]\0[name_bytes]'. This enables efficient, multi-level filtering.","This change significantly improves query performance and flexibility, allowing for targeted data retrieval without full index scans. It introduces type safety for architectural components, reducing architectural debt and aligning it with the robust design of the 'task' and 'memories' crates.",<Timestamp>
+"mem-008","Decision","System","All","Consolidate all CLI entry points into the 'knowledge' crate","The project had multiple binary crates (task, memories, architecture, knowledge), leading to code duplication, unclear separation of concerns, and architectural inconsistency.","Removed the binary targets from 'task', 'memories', and 'architecture', making them pure library crates. All CLI functionality is now centralized and handled exclusively by the 'knowledge' binary crate.","This refactoring enforces the Single Responsibility Principle, reduces code duplication, provides a single consistent user interface, and results in a more elegant and maintainable architecture with a clear separation between library logic and application execution."
 ```
 
 **`todo.csv` (Nhiệm vụ mới)**
 
 ```csv
-"task-013","Refactor","architecture","Implement type-safe enum and structured index for architecture crate","High","Open","Coder","","Refactor 'architecture' crate: 1. Create 'Kind' enum for the 'type' field with TryFrom<String>/From<&Kind> impls. 2. Update Entry/Summary structs to use 'Kind'. 3. Re-implement the `index()` function to create a structured key: '[type_byte][context_bytes]\0[module_bytes]\0[name_bytes]'. 4. Update CLI `add` command to handle enum conversion. 5. Update all tests to use the new 'Kind' enum and verify the new index logic."
+"task-014","Refactor","System","Centralize all CLI functionality into the 'knowledge' crate","High","Open","Coder","","1. Delete bin targets from 'task', 'memories', 'architecture'. 2. Update their Cargo.toml files to be lib-only. 3. Enhance 'knowledge' CLI to fully cover all removed functionalities. 4. Refactor 'knowledge::architecture::list' to support multi-level filtering. 5. Update the 'Architecture::List' subcommand in 'knowledge/main.rs' with new filter options. 6. Verify all changes with 'cargo check' and manual testing of the unified CLI."
 ```
 
-Hãy tiến hành thực hiện các thay đổi này. Đây là bước quan trọng tiếp theo để củng cố nền tảng kiến trúc của toàn bộ hệ thống.
+Đây là một bước tái cấu trúc nền tảng. Việc hoàn thành nó sẽ đưa hệ thống của chúng ta đến một trạng thái trong sáng và vững chắc hơn rất nhiều. Hãy tiến hành.

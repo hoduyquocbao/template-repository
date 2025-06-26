@@ -94,9 +94,15 @@ enum Architecture { // ĐÃ ĐỔI TÊN
     },
     /// Liệt kê các bản ghi kiến trúc
     List {
-        /// Tiền tố để lọc (ví dụ: "System:Director")
-        #[arg(long, default_value = "")]
-        prefix: String,
+        /// Lọc theo loại (ví dụ: 'Agent', 'Module')
+        #[arg(long)]
+        r#type: Option<String>,
+        /// Lọc thêm theo ngữ cảnh (chỉ hoạt động nếu có --type)
+        #[arg(long)]
+        context: Option<String>,
+        /// Lọc thêm theo module (chỉ hoạt động nếu có --type và --context)
+        #[arg(long)]
+        module: Option<String>,
         /// Số lượng tối đa hiển thị
         #[arg(short, long, default_value = "10")]
         limit: usize,
@@ -252,8 +258,8 @@ async fn main() -> Result<(), repository::Error> {
                     Err(e) => return Err(e),
                 }
             }
-            Architecture::List { prefix, limit } => { // Cập nhật tên enum
-                let result = architecture::list(&store, prefix, limit).await?;
+            Architecture::List { r#type, context, module, limit } => {
+                let result = architecture::list(&store, r#type, context, module, limit).await?;
                 display::show(result)?;
             }
         },
