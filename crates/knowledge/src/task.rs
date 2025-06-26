@@ -1,8 +1,12 @@
 //! Module quản lý các bản ghi công việc (todo) thông qua `todo` crate.
 
+use repository::error::ValidationError;
 use repository::{Error, Id, Query, Storage};
 pub use task::{Entry, Patch, Priority, Status, Summary};
 use task;
+use shared::interaction::Command;
+use shared::interaction::Interaction;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct Add {
@@ -16,48 +20,73 @@ pub struct Add {
     pub notes: String,
 }
 
+impl Command for Add {
+    type Output = Entry;
+}
+
 impl Add {
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+        let mut errors = Vec::new();
+
         if self.task.trim().is_empty() {
-            return Err(Error::Validation(
-                "Mô tả công việc không được để trống.".to_string(),
-            ));
+            errors.push(ValidationError {
+                field: "task".to_string(),
+                message: "Mô tả công việc không được để trống.".to_string(),
+            });
         }
         if self.task.len() > 256 {
-            return Err(Error::Validation(
-                "Mô tả công việc không được vượt quá 256 ký tự.".to_string(),
-            ));
+            errors.push(ValidationError {
+                field: "task".to_string(),
+                message: "Mô tả công việc không được vượt quá 256 ký tự.".to_string(),
+            });
         }
         if self.context.len() > 64 {
-            return Err(Error::Validation(
-                "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
-            ));
+            errors.push(ValidationError {
+                field: "context".to_string(),
+                message: "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
+            });
         }
         if self.module.len() > 64 {
-            return Err(Error::Validation(
-                "Module không được vượt quá 64 ký tự.".to_string(),
-            ));
+            errors.push(ValidationError {
+                field: "module".to_string(),
+                message: "Module không được vượt quá 64 ký tự.".to_string(),
+            });
         }
-        // Thêm các quy tắc khác nếu cần
-        Ok(())
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
-/// Thêm một công việc mới.
-/// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
-pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
-    task::add(
+pub async fn add<S: Storage>(store: &S, interaction: Interaction<Add>) -> Result<Entry, Error> {
+    info!(interaction_id = %interaction.id, command = ?interaction.command, "Đang xử lý lệnh AddTask");
+    
+    // 1. Xác thực
+    interaction.command.validate().map_err(Error::Validation)?;
+    
+    // 2. Gọi logic nghiệp vụ cốt lõi
+    let result = task::add(
         store,
-        args.context,
-        args.module,
-        args.task,
-        args.priority,
-        args.status,
-        args.assignee,
-        args.due,
-        args.notes,
-    )
-    .await
+        interaction.command.context,
+        interaction.command.module,
+        interaction.command.task,
+        interaction.command.priority,
+        interaction.command.status,
+        interaction.command.assignee,
+        interaction.command.due,
+        interaction.command.notes,
+    ).await;
+
+    // 3. Ghi nhật ký kết quả
+    match &result {
+        Ok(entry) => info!(interaction_id = %interaction.id, task_id = %entry.id, "Hoàn thành xử lý AddTask"),
+        Err(e) => tracing::error!(interaction_id = %interaction.id, error = ?e, "Xử lý AddTask thất bại"),
+    }
+    
+    result
 }
 
 /// Lấy một công việc bằng ID.

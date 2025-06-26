@@ -8,6 +8,14 @@
 // Import macro derive cho error, giúp tự động sinh code cho enum lỗi
 use thiserror::Error; // thiserror: Chuẩn hóa và đơn giản hóa việc định nghĩa lỗi
 
+/// Đại diện cho một lỗi xác thực cụ thể cho một trường.
+#[derive(Error, Debug, Clone)]
+#[error("lỗi trường '{field}': {message}")]
+pub struct ValidationError {
+    pub field: String,
+    pub message: String,
+}
+
 /// Các loại lỗi có thể xảy ra trong hệ thống.
 ///
 /// Enum này triển khai `std::error::Error` thông qua derive macro của thiserror,
@@ -20,10 +28,9 @@ pub enum Error {
     #[error("mục không tìm thấy")]
     Missing,
 
-    /// Được trả về khi đầu vào không hợp lệ được cung cấp.
-    /// Mục đích: Bắt các trường hợp dữ liệu đầu vào sai, thiếu, hoặc không hợp lệ.
-    #[error("đầu vào không hợp lệ: {0}")]
-    Validation(String),
+    /// Được trả về khi đầu vào không hợp lệ, chứa một danh sách các lỗi cụ thể.
+    #[error("dữ liệu không hợp lệ")]
+    Validation(Vec<ValidationError>),
 
     /// Lỗi từ lớp lưu trữ cơ bản (sled).
     /// Mục đích: Bọc lỗi từ backend lưu trữ, giúp trace nguồn gốc lỗi.
@@ -75,4 +82,8 @@ pub enum Error {
     /// Mục đích: Phân biệt lỗi liên quan đến định dạng CSV hoặc đọc/ghi CSV.
     #[error("lỗi csv: {0}")]
     Csv(#[from] csv::Error), // THÊM MỚI
+
+    /// Lỗi khi phân tích cú pháp.
+    #[error("lỗi phân tích cú pháp: {0}")]
+    Parse(String),
 }

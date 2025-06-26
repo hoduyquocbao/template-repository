@@ -1,7 +1,7 @@
 //! Triển khai Entity cho mô hình Task, sử dụng enum để tăng cường an toàn và hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Storage, Id, Error, Entity, Key, now, Query};
+use repository::{error::ValidationError, Entity, Error, Id, Key, now, Query, Storage};
 use shared::Showable;
 use tracing::{info, instrument, warn};
 use std::convert::TryFrom;
@@ -37,11 +37,15 @@ impl From<&Status> for u8 {
 impl TryFrom<String> for Status {
     type Error = Error;
     fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.as_str() {
-            "Open" => Ok(Status::Open),
-            "Pending" => Ok(Status::Pending),
-            "Done" => Ok(Status::Done),
-            _ => Err(Error::Validation(format!("Trạng thái '{}' không hợp lệ.", s))),
+        match s.to_lowercase().as_str() {
+            "open" => Ok(Status::Open),
+            "inprogress" => Ok(Status::Pending),
+            "done" => Ok(Status::Done),
+            "wontfix" => Ok(Status::Pending),
+            _ => Err(Error::Validation(vec![ValidationError {
+                field: "status".to_string(),
+                message: format!("Trạng thái '{}' không hợp lệ.", s),
+            }])),
         }
     }
 }
@@ -59,11 +63,15 @@ impl From<&Priority> for u8 {
 impl TryFrom<String> for Priority {
     type Error = Error;
     fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.as_str() {
-            "High" => Ok(Priority::High),
-            "Medium" => Ok(Priority::Medium),
-            "Low" => Ok(Priority::Low),
-            _ => Err(Error::Validation(format!("Ưu tiên '{}' không hợp lệ.", s))),
+        match s.to_lowercase().as_str() {
+            "low" => Ok(Priority::Low),
+            "medium" => Ok(Priority::Medium),
+            "high" => Ok(Priority::High),
+            "urgent" => Ok(Priority::High),
+            _ => Err(Error::Validation(vec![ValidationError {
+                field: "priority".to_string(),
+                message: format!("Ưu tiên '{}' không hợp lệ.", s),
+            }])),
         }
     }
 }
@@ -157,7 +165,10 @@ pub async fn add<S: Storage>(
     info!(task = %task_desc, "Đang thêm công việc mới");
     if task_desc.is_empty() {
         warn!("Cố gắng thêm công việc với nội dung rỗng");
-        return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
+        return Err(Error::Validation(vec![ValidationError {
+            field: "task".to_string(),
+            message: "Mô tả công việc không được để trống.".to_string(),
+        }]));
     }
     
     let task = Entry {
@@ -192,10 +203,13 @@ pub async fn change<S: Storage>(store: &S, id: Id, patch: Patch) -> Result<Entry
     info!(%id, ?patch, "Đang cập nhật công việc");
     
     // Kiểm tra lỗi đầu vào
-    if let Some(text) = &patch.task {
-        if text.is_empty() {
+    if let Some(ref task) = patch.task {
+        if task.trim().is_empty() {
             warn!(%id, "Cố gắng cập nhật công việc với nội dung rỗng");
-            return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
+            return Err(Error::Validation(vec![ValidationError {
+                field: "task".to_string(),
+                message: "Mô tả công việc không được để trống.".to_string(),
+            }]));
         }
     }
     

@@ -1,5 +1,6 @@
 // use serde::{Serialize, Deserialize};
 use repository::{Query, Id, Key};
+pub mod interaction;
 
 /// Trait để định nghĩa cách một Summary được hiển thị.
 /// Mục đích: Cho phép hàm 'show' generic hóa cách in ra màn hình.

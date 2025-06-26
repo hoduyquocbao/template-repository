@@ -1,8 +1,13 @@
 //! Module quản lý các bản ghi kiến trúc thông qua `architecture` crate.
 
+use repository::error::ValidationError;
 use repository::{Error, Storage};
 use architecture::{self, Entry}; // Chỉ import Arch, không import Summary hay đổi tên
 use shared;
+use shared::interaction::{Command, Interaction};
+use tracing::info;
+
+pub use architecture::Kind;
 
 #[derive(Debug, Clone)]
 pub struct Add {
@@ -18,49 +23,70 @@ pub struct Add {
     pub created: u128,
 }
 
+impl Command for Add {
+    type Output = architecture::Entry;
+}
+
 impl Add {
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+        let mut errors = Vec::new();
         if self.name.trim().is_empty() {
-            return Err(Error::Validation("Tên không được để trống.".to_string()));
+            errors.push(ValidationError {
+                field: "name".to_string(),
+                message: "Tên không được để trống.".to_string(),
+            });
         }
-        if self.name.len() > 64 {
-            return Err(Error::Validation(
-                "Tên không được vượt quá 64 ký tự.".to_string(),
-            ));
+        if self.name.len() > 128 {
+            errors.push(ValidationError {
+                field: "name".to_string(),
+                message: "Tên không được vượt quá 128 ký tự.".to_string(),
+            });
         }
-        if self.context.len() > 64 {
-            return Err(Error::Validation(
-                "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
-            ));
+        if self.context.len() > 64 || self.module.len() > 64 {
+            errors.push(ValidationError {
+                field: "context/module".to_string(),
+                message: "Ngữ cảnh và module không được vượt quá 64 ký tự.".to_string(),
+            });
         }
-        if self.module.len() > 64 {
-            return Err(Error::Validation(
-                "Module không được vượt quá 64 ký tự.".to_string(),
-            ));
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
         }
-        // Thêm các quy tắc khác nếu cần
-        Ok(())
     }
 }
 
-/// Thêm hoặc cập nhật một bản ghi kiến trúc.
-/// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
-pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
-    let kind = architecture::Kind::try_from(args.r#type)?;
-    let entry = Entry {
-        context: args.context,
-        module: args.module,
+pub async fn add<S: Storage>(
+    store: &S,
+    interaction: Interaction<Add>,
+) -> Result<architecture::Entry, Error> {
+    info!(interaction_id = %interaction.id, command = ?interaction.command, "Đang xử lý lệnh AddArchitecture");
+
+    interaction.command.validate().map_err(Error::Validation)?;
+
+    let kind = architecture::Kind::try_from(interaction.command.r#type)?;
+    let entry = architecture::Entry {
+        id: repository::Id::new_v4(),
+        context: interaction.command.context,
+        module: interaction.command.module,
         r#type: kind,
-        name: args.name,
-        responsibility: args.responsibility,
-        dependency: args.dependency,
-        performance: args.performance,
-        naming: args.naming,
-        prompt: args.prompt,
-        created: args.created,
+        name: interaction.command.name,
+        responsibility: interaction.command.responsibility,
+        dependency: interaction.command.dependency,
+        performance: interaction.command.performance,
+        naming: interaction.command.naming,
+        prompt: interaction.command.prompt,
+        created: interaction.command.created,
     };
-    let result = architecture::add(store, entry).await?;
-    Ok(result)
+
+    let result = architecture::add(store, entry).await;
+
+    match &result {
+        Ok(entry) => info!(interaction_id = %interaction.id, architecture_id = %entry.id, "Hoàn thành xử lý Add Architecture"),
+        Err(e) => tracing::error!(interaction_id = %interaction.id, error = ?e, "Xử lý AddArchitecture thất bại"),
+    }
+
+    result
 }
 
 /// Lấy một bản ghi kiến trúc bằng key tổng hợp.
@@ -113,3 +139,4 @@ pub async fn list<S: Storage>(
     let query = shared::query(prefix, None::<Vec<u8>>, limit);
     architecture::query(store, query).await
 }
+

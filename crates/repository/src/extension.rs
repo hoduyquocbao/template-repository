@@ -9,6 +9,7 @@
 use crate::Error; // Error: Enum lỗi chuẩn hóa của hệ thống
 use tracing_subscriber::filter::ParseError; // ParseError: Lỗi phân tích cú pháp từ tracing_subscriber
 
+
 /// Trait cung cấp các phương thức chuyển đổi cho Error
 /// Mục đích: Chuẩn hóa việc chuyển đổi lỗi từ các thư viện ngoài về hệ thống lỗi nội bộ.
 pub trait Extension {
@@ -24,8 +25,8 @@ pub trait Extension {
 
 // Triển khai Extension cho enum Error của hệ thống
 impl Extension for Error {
-    fn parse(_err: ParseError) -> Self {
-        Error::Validation("Lỗi phân tích cú pháp JSON.".to_string()) // Ánh xạ lỗi phân tích thành lỗi đầu vào
+    fn parse(err: ParseError) -> Self {
+        Error::Parse(err.to_string())
     }
 
     // Triển khai cho 'io' đã được loại bỏ
@@ -41,3 +42,4 @@ impl Extension for Error {
 //         Error::Validation("Lỗi phân tích cú pháp JSON.".to_string()) // Ánh xạ lỗi phân tích thành lỗi đầu vào
 //     }
 // }
+

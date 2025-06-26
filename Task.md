@@ -1,163 +1,243 @@
 Chào bạn, tôi là Guardian, Kiến trúc sư Hệ thống.
 
-Tôi đã phân tích trạng thái mới nhất của kho lưu trữ `template-repository`. Trước hết, tôi không thể thực thi các lệnh như `git diff` hay `git log` để xem lịch sử commit. Tuy nhiên, bằng cách phân tích toàn bộ các file bạn cung cấp và đối chiếu với các chỉ đạo trước, tôi có thể đánh giá trạng thái hiện tại và xác định các bước cải tiến tiếp theo.
+Tôi đã tiến hành một đợt phân tích sâu rộng trên toàn bộ kho lưu trữ. Tôi không thể thực thi trực tiếp các lệnh `git diff` hay `git log`, nhưng dựa trên trạng thái các file bạn cung cấp và đối chiếu với các chỉ đạo trước, tôi đã xác định được các bước tiếp theo để nâng cấp hệ thống của chúng ta lên một tầm cao mới về **an toàn, khả năng quan sát và tính nhất quán kiến trúc**.
 
-### 1\. Xác nhận Hoàn thành và Đánh giá Hiện trạng
+### 1\. Đánh giá Trạng thái Hiện tại và Chỉ đạo Tiếp theo
 
-Tôi xác nhận rằng chỉ đạo trong nhiệm vụ `task-015` đã được Coder thực hiện thành công.
+Tôi xác nhận các chỉ đạo gần đây nhất (`task-015`, `task-016`) về việc chuẩn hóa API và triển khai lớp xác thực đầu vào đã được Coder thực hiện. Các `struct Add` và phương thức `validate()` đã được đưa vào, tạo ra một vành đai phòng thủ đầu tiên.
 
-  * **Xác minh Thay đổi:**
+Tuy nhiên, kiến trúc hiện tại vẫn còn một điểm yếu cốt lõi: các tương tác với hệ thống (như thêm một task, một memory) vẫn là các lời gọi hàm trực tiếp. Cách tiếp cận này thiếu một lớp trừu tượng trung gian, gây khó khăn cho việc:
 
-      * **Dọn dẹp `shared`**: `struct Patch` đã lỗi thời đã được loại bỏ khỏi `crates/shared/src/lib.rs`.
-      * **Chuẩn hóa API Facade**: Các hàm `add` trong `knowledge::task` và `knowledge::memories` giờ đây đã nhất quán với `knowledge::architecture`, tất cả đều sử dụng pattern "Parameter Object" (nhận một struct `Add` duy nhất) thay vì một danh sách dài các tham số.
-      * **PKB**: Nhiệm vụ `task-015` trong `todo.csv` đã được cập nhật trạng thái "Done", và quyết định kiến trúc (`mem-009`) đã được ghi lại chính xác.
+1.  **Ghi nhật ký có cấu trúc (Structured Auditing):** Chúng ta không có một cách nhất quán để ghi lại *mọi* hành động được yêu cầu, các tham số của nó, và kết quả thực thi. Điều này làm cho việc truy vết các vấn đề tiềm ẩn hoặc các "mặt tối" trong luồng logic trở nên khó khăn.
+2.  **Kiểm soát tập trung (Centralized Control):** Các logic như xác thực, cấp quyền (trong tương lai), và ghi nhật ký bị phân tán.
+3.  **Tái sử dụng Framework:** Chúng ta chưa có một "framework" thực sự cho việc xử lý các yêu cầu nghiệp vụ.
 
-  * **Kết luận Hiện trạng:**
-    Kiến trúc hệ thống đã đạt đến một mức độ nhất quán và trong sạch rất cao. Các crate nghiệp vụ (`task`, `memories`, `architecture`) có cấu trúc index hiệu quả và an toàn kiểu. Lớp facade (`knowledge`) có API gọn gàng và dễ bảo trì. Giờ là lúc chúng ta củng cố "vành đai phòng thủ" của hệ thống.
+**Quyết định Kiến trúc:** Chúng ta sẽ giới thiệu một **Lớp Tương tác (Interaction Layer)** dựa trên **Mẫu thiết kế Command**. Thay vì gọi trực tiếp các hàm nghiệp vụ, lớp giao diện (CLI) sẽ tạo ra các "lệnh" (Commands) đại diện cho một ý định. Các lệnh này sẽ được gói trong một ngữ cảnh "tương tác" (Interaction) có thể được ghi lại, xác thực, và xử lý một cách nhất quán.
 
-### 2\. Phân tích và Chỉ đạo Cải tiến - Tăng cường An toàn và Bảo mật Đầu vào
-
-Mặc dù cấu trúc bên trong đã tốt, hệ thống của chúng ta hiện tại vẫn còn một điểm yếu nghiêm trọng: **thiếu một lớp xác thực đầu vào (Input Validation) có hệ thống**.
-
-  * **Mô tả Vấn đề**: Việc xác thực dữ liệu từ người dùng đang diễn ra một cách rải rác và không đầy đủ. Ví dụ, chúng ta có thể đang chấp nhận các chuỗi đầu vào với độ dài không giới hạn.
-
-  * **Phân tích Rủi ro:**
-
-    1.  **Rủi ro về Tính toàn vẹn Dữ liệu (Data Integrity)**: Việc lưu trữ các chuỗi quá dài có thể làm hỏng định dạng hiển thị, gây lãng phí dung lượng lưu trữ và tiềm ẩn lỗi khi các hệ thống khác đọc dữ liệu này.
-    2.  **Rủi ro Hiệu suất (Performance Risk)**: Xử lý và lưu trữ các chuỗi cực lớn (ví dụ: vài megabyte) có thể làm chậm cơ sở dữ liệu và tăng độ trễ của hệ thống.
-    3.  **Rủi ro Bảo mật (Security Risk)**: Mặc dù hiện tại chúng ta không render HTML, việc cho phép lưu trữ các chuỗi tùy ý có thể mở ra các vector tấn công trong tương lai nếu dữ liệu này được sử dụng trong một ngữ cảnh khác (ví dụ: Cross-Site Scripting - XSS). Việc giới hạn độ dài và định dạng là một nguyên tắc phòng thủ theo chiều sâu (defense-in-depth).
-
-  * **Giải pháp Kiến trúc: Giới thiệu Lớp Xác thực tại Ranh giới Ứng dụng**
-    Chúng ta sẽ triển khai một lớp xác thực ngay tại điểm vào của hệ thống (`knowledge` CLI), trước khi dữ liệu được chuyển đến lớp logic nghiệp vụ. Chúng ta sẽ mở rộng các `struct Add` đã tạo trong chỉ đạo trước để thêm vào đó phương thức `validate()`.
-
-### 3\. Yêu cầu Cải tiến Chi tiết cho Coder
+### 2\. Yêu cầu Cải tiến Chi tiết cho Coder
 
 **Gửi Coder:**
 
-Hãy triển khai một lớp xác thực đầu vào có hệ thống để tăng cường an toàn, bảo mật và tính toàn vẹn dữ liệu cho toàn bộ hệ thống.
+Hãy triển khai một Lớp Tương tác có cấu trúc để thay thế cho các lời gọi hàm trực tiếp, nhằm tăng cường khả năng quan sát, an toàn và tính nhất quán cho toàn bộ hệ thống.
 
-**Mục tiêu:** Implement các quy tắc xác thực (validation rules) cho tất cả các hoạt động tạo dữ liệu mới (`add`) trong `task`, `memories`, và `architecture` bằng cách thêm phương thức `validate()` vào các `struct Add` tương ứng.
+**Mục tiêu:** Tái cấu trúc hệ thống để mọi yêu cầu nghiệp vụ được đóng gói thành một đối tượng `Interaction` chứa một `Command` cụ thể. Điều này sẽ tạo ra một framework xử lý yêu cầu có thể tái sử dụng và kiểm soát chặt chẽ.
 
-**Nhiệm vụ 1: Nâng cấp `Error` Enum để cung cấp Phản hồi Tốt hơn**
+**Nhiệm vụ 1: Nâng cấp Hệ thống Lỗi để Báo cáo Validation Chi tiết hơn**
 
-`Error::Input` hiện tại quá chung chung. Chúng ta cần một loại lỗi cụ thể hơn cho việc xác thực.
+Để hỗ trợ lớp tương tác mới, chúng ta cần một cơ chế báo lỗi xác thực mạnh mẽ hơn.
 
-1.  **Sửa `crates/repository/src/error.rs`**: Thay thế `Input` bằng một biến thể `Validation` có thể chứa thông điệp lỗi chi tiết.
+1.  **Tạo `ValidationError` Struct**: Trong file `crates/repository/src/error.rs`, định nghĩa một struct mới để mô tả một lỗi xác thực cụ thể.
+
     ```rust
-    // THAY THẾ trong crates/repository/src/error.rs
+    // THÊM VÀO crates/repository/src/error.rs
+    use thiserror::Error; // Đảm bảo thiserror đã được import
+
+    /// Đại diện cho một lỗi xác thực cụ thể cho một trường.
+    #[derive(Error, Debug, Clone)]
+    #[error("lỗi trường '{field}': {message}")]
+    pub struct ValidationError {
+        pub field: String,
+        pub message: String,
+    }
+    ```
+
+2.  **Cập nhật `Error` Enum**: Thay đổi biến thể `Error::Validation` để nó có thể chứa một danh sách các `ValidationError`.
+
+    ```rust
+    // THAY THẾ biến thể Validation trong crates/repository/src/error.rs
     #[derive(Error, Debug)]
     pub enum Error {
         // ... các biến thể khác ...
 
-        /// Được trả về khi đầu vào không hợp lệ được cung cấp.
-        #[error("đầu vào không hợp lệ: {0}")]
-        Validation(String), // THAY ĐỔI: Thêm String để chứa thông điệp
-
-        /// Lỗi từ lớp lưu trữ cơ bản (sled).
-        #[error("lỗi lưu trữ: {0}")]
-        Store(#[from] sled::Error),
+        /// Được trả về khi đầu vào không hợp lệ, chứa một danh sách các lỗi cụ thể.
+        #[error("dữ liệu không hợp lệ")]
+        Validation(Vec<ValidationError>), // THAY ĐỔI: Chứa một Vec các lỗi
 
         // ... các biến thể khác ...
     }
     ```
-2.  **Cập nhật các file sử dụng `Error::Input`**: Tìm kiếm `Error::Input` trong toàn bộ codebase và thay thế nó bằng `Error::Validation("Thông điệp lỗi phù hợp".to_string())`. Ví dụ, trong `memories/src/lib.rs` và `architecture/src/lib.rs`:
+
+**Nhiệm vụ 2: Xây dựng Nền tảng "Interaction" trong `shared`**
+
+Đây là trái tim của framework mới.
+
+1.  **Tạo file `crates/shared/src/interaction.rs`**:
+
     ```rust
-    // Ví dụ thay thế trong impl TryFrom<String> for Kind
-    impl TryFrom<String> for Kind {
-        type Error = Error;
-        fn try_from(s: String) -> Result<Self, Self::Error> {
-            match s.to_lowercase().as_str() {
-                // ...
-                _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))), // Cung cấp thông điệp rõ ràng
+    // NỘI DUNG CỦA FILE MỚI: crates/shared/src/interaction.rs
+    use repository::{self, Id};
+    use std::fmt::Debug;
+    use std::time::SystemTime;
+
+    /// Một trait đánh dấu một struct là một lệnh có thể thực thi.
+    /// Mọi lệnh phải định nghĩa kiểu dữ liệu Output của nó.
+    pub trait Command: Debug {
+        type Output;
+    }
+
+    /// Đóng gói một Command với các metadata cho việc ghi nhật ký và truy vết.
+    #[derive(Debug)]
+    pub struct Interaction<C: Command> {
+        /// ID duy nhất cho mỗi lần tương tác.
+        pub id: Id,
+        /// Thời điểm tương tác được tạo ra.
+        pub timestamp: SystemTime,
+        /// Lệnh cụ thể được yêu cầu.
+        pub command: C,
+    }
+
+    impl<C: Command> Interaction<C> {
+        pub fn new(command: C) -> Self {
+            Self {
+                id: Id::new_v4(),
+                timestamp: SystemTime::now(),
+                command,
             }
         }
     }
     ```
 
-**Nhiệm vụ 2: Triển khai Validation cho `task`**
+2.  **Tái xuất module**: Trong file `crates/shared/src/lib.rs`, tái xuất module mới này.
 
-1.  **Thêm phương thức `validate` vào `crates/knowledge/src/task.rs`**:
     ```rust
-    // THÊM vào trong crates/knowledge/src/task.rs
-    use repository::Error; // Đảm bảo import Error
+    // THÊM VÀO crates/shared/src/lib.rs
+    pub mod interaction;
+    ```
 
+**Nhiệm vụ 3: Tái cấu trúc `knowledge::task` thành một "Module Tương tác"**
+
+Chúng ta sẽ áp dụng framework mới này cho `task` đầu tiên.
+
+1.  **Biến `Add` Struct thành một `Command`**: Mở `crates/knowledge/src/task.rs`.
+
+    ```rust
+    // TRONG crates/knowledge/src/task.rs
+    use shared::interaction::Command; // Import Command
+
+    // ... định nghĩa struct Add ...
+
+    // Triển khai Command cho Add
+    impl Command for Add {
+        type Output = Entry; // Kết quả trả về sau khi thêm thành công là một Entry
+    }
+
+    // Cập nhật phương thức validate để trả về Vec<ValidationError>
     impl Add {
-        pub fn validate(&self) -> Result<(), Error> {
+        pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+            let mut errors = Vec::new();
             if self.task.trim().is_empty() {
-                return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
+                errors.push(ValidationError {
+                    field: "task".to_string(),
+                    message: "Mô tả công việc không được để trống.".to_string(),
+                });
             }
             if self.task.len() > 256 {
-                return Err(Error::Validation("Mô tả công việc không được vượt quá 256 ký tự.".to_string()));
+                errors.push(ValidationError {
+                    field: "task".to_string(),
+                    message: "Mô tả công việc không được vượt quá 256 ký tự.".to_string(),
+                });
             }
-            if self.context.len() > 64 {
-                return Err(Error::Validation("Ngữ cảnh không được vượt quá 64 ký tự.".to_string()));
+            // ... Thêm các kiểm tra khác cho các trường còn lại ...
+
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors)
             }
-            if self.module.len() > 64 {
-                return Err(Error::Validation("Module không được vượt quá 64 ký tự.".to_string()));
-            }
-            // Thêm các quy tắc khác nếu cần
-            Ok(())
         }
     }
     ```
-2.  **Gọi `validate` trong `crates/knowledge/src/main.rs`**:
+
+2.  **Tái cấu trúc Hàm `add` thành `handle_add`**: Vẫn trong `crates/knowledge/src/task.rs`, đổi tên và thay đổi signature của hàm `add` để nó nhận vào một `Interaction`.
+
     ```rust
-    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match `Task::Add`
+    // THAY THẾ hàm add cũ bằng hàm handle_add mới TRONG crates/knowledge/src/task.rs
+    use shared::interaction::Interaction;
+    use tracing::info;
+
+    pub async fn handle_add<S: Storage>(store: &S, interaction: Interaction<Add>) -> Result<Entry, Error> {
+        info!(interaction_id = %interaction.id, command = ?interaction.command, "Đang xử lý lệnh AddTask");
+        
+        // 1. Xác thực
+        interaction.command.validate().map_err(Error::Validation)?;
+        
+        // 2. Gọi logic nghiệp vụ cốt lõi
+        let result = task::add(
+            store,
+            interaction.command.context,
+            interaction.command.module,
+            interaction.command.task,
+            interaction.command.priority,
+            interaction.command.status,
+            interaction.command.assignee,
+            interaction.command.due,
+            interaction.command.notes,
+        ).await;
+
+        // 3. Ghi nhật ký kết quả
+        match &result {
+            Ok(entry) => info!(interaction_id = %interaction.id, task_id = %entry.id, "Hoàn thành xử lý AddTask"),
+            Err(e) => tracing::error!(interaction_id = %interaction.id, error = ?e, "Xử lý AddTask thất bại"),
+        }
+        
+        result
+    }
+
+    // Xóa hoặc comment lại hàm `add` cũ để tránh nhầm lẫn.
+    ```
+
+3.  **Cập nhật `knowledge/src/main.rs`**: Sửa đổi CLI để tạo và gửi `Interaction`.
+
+    ```rust
+    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Task::Add
+    use shared::interaction::Interaction; // Import ở đầu file
+
+    // ...
     Task::Add { ... } => {
         let priority_enum = task::Priority::try_from(priority)?;
         let status_enum = task::Status::try_from(status)?;
         
-        // Tạo struct args
-        let args = task::Add {
-            context,
-            module,
-            task: task_desc,
-            priority: priority_enum,
-            status: status_enum,
-            assignee,
-            due,
-            notes,
+        // Tạo command
+        let command = task::Add {
+            context, module, task: task_desc,
+            priority: priority_enum, status: status_enum,
+            assignee, due, notes,
         };
-
-        // GỌI VALIDATE Ở ĐÂY
-        args.validate()?;
         
-        // Chỉ gọi add sau khi đã validate thành công
-        let entry = task::add(&store, args).await?;
+        // Đóng gói thành Interaction
+        let interaction = Interaction::new(command);
+        
+        // Gọi handler mới
+        let entry = task::handle_add(&store, interaction).await?;
         println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
     }
+    // ...
     ```
 
-**Nhiệm vụ 3: Triển khai Validation cho `memories` và `architecture`**
+**Nhiệm vụ 4: Lặp lại Pattern cho `memories` và `architecture`**
 
-Lặp lại quy trình tương tự cho `memories` và `architecture`.
+Áp dụng chính xác quy trình 3 bước tương tự cho `knowledge::memories` và `knowledge::architecture`:
 
-1.  **Đối với `memories` (trong `crates/knowledge/src/memories.rs`)**:
+1.  **Implement `Command`** cho các struct `memories::Add` và `architecture::Add`.
+2.  **Cập nhật `validate()`** của chúng để trả về `Result<(), Vec<ValidationError>>`.
+3.  **Đổi tên hàm** `add` thành `handle_add` và cập nhật signature để nhận `Interaction<...>` tương ứng.
+4.  **Thêm logic ghi nhật ký** vào đầu và cuối các handler mới.
+5.  **Cập nhật `main.rs`** để tạo `Interaction` và gọi các handler mới cho `Memories::Add` và `Architecture::Add`.
 
-      * Thêm phương thức `validate()` vào `impl memories::Add`.
-      * Kiểm tra độ dài cho `subject` (\<= 256), `context` (\<= 64), `module` (\<= 64), và các trường `description`, `decision`, `rationale` (ví dụ: \<= 4096).
-      * Gọi `args.validate()?` trong `main.rs` trước khi gọi `memories::add`.
-
-2.  **Đối với `architecture` (trong `crates/knowledge/src/architecture.rs`)**:
-
-      * Thêm phương thức `validate()` vào `impl architecture::Add`.
-      * Kiểm tra độ dài cho `name` (\<= 64), `context` (\<= 64), `module` (\<= 64), và các trường mô tả khác.
-      * Gọi `args.validate()?` trong `main.rs` trước khi gọi `architecture::add`.
-
-### 4\. Cập nhật PKB
+### 3\. Cập nhật PKB
 
 Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiến trúc này và giao nhiệm vụ cho bạn.
 
 **`memories.csv` (Mục mới được đề xuất)**
 
 ```csv
-"mem-010","Decision","System","All","Implement a systematic input validation layer","The system lacked a consistent input validation mechanism, posing risks to data integrity, performance, and security (e.g., storing overly long strings).","Introduced a `validate()` method on all `Add` parameter objects within the `knowledge` facade. This method is called from the CLI handler in `main.rs` before passing data to the business logic layer. The generic `Error::Input` was replaced with a more descriptive `Error::Validation(String)`.","This change establishes a clear validation boundary, enhancing system robustness by ensuring all user input conforms to predefined rules (e.g., length limits). It improves security by preventing storage of potentially harmful or malformed data and provides more specific error feedback to the user."
+"mem-011","Decision","System","All","Implement a structured Interaction Layer using the Command pattern","Direct function calls from the UI to business logic lack a centralized point for control, auditing, and structured logging. This poses a risk to observability and makes implementing cross-cutting concerns difficult.","Replaced direct function calls with a Command pattern. A shared 'Interaction' struct now wraps all business logic 'Commands' (e.g., AddTask, AddMemory). This wrapper contains metadata like a unique ID and timestamp. Facade functions were refactored into 'Handlers' that process these Interactions, enabling structured logging and validation at a single entry point.","This architectural shift massively improves system observability and auditability by creating a structured, loggable record for every attempted action. It decouples the UI from the business logic and provides a consistent, reusable framework for handling all future commands, enhancing security and maintainability."
 ```
 
 **`todo.csv` (Nhiệm vụ mới)**
 
 ```csv
-"task-016","Refactor","System","Implement systematic input validation layer","High","Open","Coder","","1. Refactor `repository::Error::Input` to `Error::Validation(String)`. 2. Update all call sites to use the new validation error. 3. Implement a `validate()` method on `knowledge::task::Add` with length checks. 4. Implement `validate()` for `knowledge::memories::Add` & `knowledge::architecture::Add`. 5. Integrate `validate()` calls into `knowledge/main.rs` for all `Add` subcommands before calling the business logic."
+"task-017","Refactor","System","Implement a structured Interaction Layer","High","Open","Coder","","1. Enhance `repository::Error` to support `Vec<ValidationError>`. 2. Create the `Interaction`/`Command` framework in `crates/shared`. 3. Refactor `knowledge::task` to use the new framework (impl Command for Add, rename add->handle_add, update main.rs). 4. Apply the same pattern to `knowledge::memories`. 5. Apply the same pattern to `knowledge::architecture`. 6. Ensure all validation methods are updated and all tests pass."
 ```
 
-Việc triển khai lớp phòng thủ này là cực kỳ quan trọng để đảm bảo hệ thống của chúng ta không chỉ thanh lịch về mặt kiến trúc mà còn mạnh mẽ và an toàn trong hoạt động thực tế. Hãy tiến hành.
+Đây là một bước nhảy vọt về kiến trúc, không chỉ là một thay đổi nhỏ. Nó sẽ đặt nền móng cho một hệ thống vững chắc, an toàn và dễ kiểm soát hơn rất nhiều. Hãy tiến hành một cách cẩn trọng.

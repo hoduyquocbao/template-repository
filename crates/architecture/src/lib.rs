@@ -2,9 +2,10 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Storage, Error, Key, now, Query};
+use repository::{now, Entity, Error, Key, Query, Storage};
 use shared::{Showable, Filterable};
 use std::convert::TryFrom;
+use repository::Id;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Kind {
@@ -54,7 +55,10 @@ impl TryFrom<String> for Kind {
             "event" => Ok(Kind::Event),
             "command" => Ok(Kind::Command),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))),
+            _ => Err(Error::Validation(vec![repository::error::ValidationError {
+                field: "kind".to_string(),
+                message: format!("Loại '{}' không hợp lệ.", s),
+            }])),
         }
     }
 }
@@ -69,6 +73,7 @@ impl std::fmt::Display for Kind {
 /// Đây là một `Entity` có thể được lưu trữ và truy vấn thông qua `repository`.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Entry {
+    pub id: Id,
     pub context: String,      // Ngữ cảnh (Bounded Context)
     pub module: String,       // Module hoặc crate
     pub r#type: Kind,         // Loại thành phần (Agent, Module, Trait, etc.)
@@ -199,6 +204,7 @@ mod tests {
         rt.block_on(async {
             let store = memory();
             let entry1 = Entry {
+                id: Id::new_v4(),
                 context: "Sys".to_string(), module: "Dir".to_string(), r#type: Kind::Agent, name: "Dir".to_string(),
                 responsibility: "Coord".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                 prompt: "".to_string(), created: 0, // Sẽ được ghi đè bởi add
@@ -212,6 +218,7 @@ mod tests {
             assert_eq!(found.responsibility, "Coord");
 
             let entry_updated = Entry {
+                id: Id::new_v4(),
                 responsibility: "NewCoord".to_string(), // Thay đổi responsibility
                 ..entry1 // Giữ nguyên các trường khác
             };
@@ -231,6 +238,7 @@ mod tests {
         rt.block_on(async {
             let store = memory();
             let entry = Entry {
+                id: Id::new_v4(),
                 context: "Sys".to_string(), module: "Mod".to_string(), r#type: Kind::Agent, name: "Name".to_string(),
                 responsibility: "Resp".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                 prompt: "".to_string(), created: now(),
@@ -251,6 +259,7 @@ mod tests {
             let store = memory();
             for i in 0..5 {
                 let entry = Entry {
+                    id: Id::new_v4(),
                     context: "Test".to_string(), module: format!("Mod{}", i), r#type: Kind::Agent, name: format!("Item{}", i),
                     responsibility: "".to_string(), dependency: "".to_string(), performance: "".to_string(), naming: "".to_string(),
                     prompt: "".to_string(), created: now() + i as u128,

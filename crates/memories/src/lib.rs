@@ -2,7 +2,7 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{Entity, Id, Storage, Error, Key, now, Query};
+use repository::{error::ValidationError, now, Entity, Error, Id, Key, Query, Storage};
 use shared::{Showable, Filterable};
 use tracing::{info, warn};
 
@@ -39,7 +39,10 @@ impl TryFrom<String> for Kind {
             "lesson" => Ok(Kind::Lesson),
             "refactor" => Ok(Kind::Refactor),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))),
+            _ => Err(Error::Validation(vec![ValidationError {
+                field: "kind".to_string(),
+                message: format!("Loại '{}' không hợp lệ.", s),
+            }])),
         }
     }
 }
@@ -138,9 +141,12 @@ pub async fn add<S: Storage>(
     let kind = Kind::try_from(kind_str)?; // Chuyển đổi và xác thực loại
     
     // Kiểm tra các trường bắt buộc
-    if context.is_empty() || module.is_empty() || subject.is_empty() {
+    if context.trim().is_empty() || module.trim().is_empty() || subject.trim().is_empty() {
         warn!("Thiếu thông tin bắt buộc khi thêm bộ nhớ");
-        return Err(Error::Validation("Context, Module, và Subject không được để trống.".to_string()));
+        return Err(Error::Validation(vec![ValidationError {
+            field: "context/module/subject".to_string(),
+            message: "Context, Module, và Subject không được để trống.".to_string(),
+        }]));
     }
     
     let entry = Entry {

@@ -10,6 +10,8 @@ use knowledge::{architecture, memories, task};
 use knowledge::task::Status;
 use knowledge::display;
 use shared::Showable;
+use shared::interaction::Interaction;
+
 
 /// Hệ thống quản lý tri thức kiến trúc và phát triển.
 #[derive(Parser)]
@@ -222,10 +224,10 @@ async fn main() -> Result<(), repository::Error> {
                 naming,
                 prompt,
             } => {
-                let args = architecture::Add {
+                let command = architecture::Add {
+                    r#type,
                     context,
                     module,
-                    r#type,
                     name,
                     responsibility,
                     dependency,
@@ -234,11 +236,9 @@ async fn main() -> Result<(), repository::Error> {
                     prompt,
                     created: repository::now(),
                 };
-
-                args.validate()?;
-
-                let entry = architecture::add(&store, args).await?;
-                println!("Đã thêm kiến trúc: {}", entry.name);
+                let interaction = Interaction::new(command);
+                let entry = architecture::add(&store, interaction).await?;
+                println!("Đã thêm kiến trúc: [{}] {}", entry.id, entry.name);
             }
             Architecture::Get {
                 context,
@@ -296,7 +296,7 @@ async fn main() -> Result<(), repository::Error> {
                 decision,
                 rationale,
             } => {
-                let args = memories::Add {
+                let command = memories::Add {
                     r#type,
                     context,
                     module,
@@ -306,14 +306,9 @@ async fn main() -> Result<(), repository::Error> {
                     rationale,
                     created: repository::now(),
                 };
-
-                args.validate()?;
-
-                let entry = memories::add(&store, args).await?;
-                println!(
-                    "Đã thêm bộ nhớ: [{}] [{:?}]: {}",
-                    entry.id, entry.r#type, entry.subject
-                );
+                let interaction = Interaction::new(command);
+                let entry = memories::add(&store, interaction).await?;
+                println!("Đã thêm ký ức: [{}] {}", entry.id, entry.subject);
             }
             Memories::Get { id } => { // Cập nhật tên enum
                 match memories::get(&store, id).await? {
@@ -351,21 +346,19 @@ async fn main() -> Result<(), repository::Error> {
             } => {
                 let priority_enum = task::Priority::try_from(priority)?;
                 let status_enum = task::Status::try_from(status)?;
-
-                let args = task::Add {
-                    context,
-                    module,
-                    task: task_desc,
-                    priority: priority_enum,
-                    status: status_enum,
-                    assignee,
-                    due,
-                    notes,
+                
+                // Tạo command
+                let command = task::Add {
+                    context, module, task: task_desc,
+                    priority: priority_enum, status: status_enum,
+                    assignee, due, notes,
                 };
-
-                args.validate()?;
-
-                let entry = task::add(&store, args).await?;
+                
+                // Đóng gói thành Interaction
+                let interaction = Interaction::new(command);
+                
+                // Gọi handler mới
+                let entry = task::add(&store, interaction).await?;
                 println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
             }
             Task::Get { id } => {
