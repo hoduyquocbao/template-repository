@@ -6,3 +6,8 @@ edition = "2024"
 [dependencies]
 repository = { path = "../repository" }
 serde = { version = "1.0", features = ["derive"] }
+regex = "1"
+
+# [[bin]]
+# name = "check_naming"
+# path = "src/check_naming.rs"

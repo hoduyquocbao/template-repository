@@ -2,7 +2,7 @@
 members = [
     "crates/architecture",
     "crates/knowledge",
-    "crates/memories",
+    "crates/memories", "crates/naming",
     "crates/repository",
     "crates/shared",
     "crates/task"

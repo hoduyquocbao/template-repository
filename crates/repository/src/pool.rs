@@ -52,4 +52,3 @@ impl<T: Clone + Send + Sync + 'static> Pool<T> {
         self.sem.available_permits()
     }
 }
-
