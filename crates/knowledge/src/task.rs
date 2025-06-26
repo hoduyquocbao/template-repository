@@ -1,6 +1,6 @@
 //! Module quản lý các bản ghi công việc (todo) thông qua `todo` crate.
 
-use repository::error::ValidationError;
+use repository::error::Fault;
 use repository::{Error, Id, Query, Storage};
 pub use task::{Entry, Patch, Priority, Status, Summary};
 use task;
@@ -25,29 +25,29 @@ impl Command for Add {
 }
 
 impl Add {
-    pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+    pub fn validate(&self) -> Result<(), Vec<Fault>> {
         let mut errors = Vec::new();
 
         if self.task.trim().is_empty() {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "task".to_string(),
                 message: "Mô tả công việc không được để trống.".to_string(),
             });
         }
         if self.task.len() > 256 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "task".to_string(),
                 message: "Mô tả công việc không được vượt quá 256 ký tự.".to_string(),
             });
         }
         if self.context.len() > 64 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "context".to_string(),
                 message: "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
             });
         }
         if self.module.len() > 64 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "module".to_string(),
                 message: "Module không được vượt quá 64 ký tự.".to_string(),
             });

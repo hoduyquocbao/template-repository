@@ -1,243 +1,159 @@
-Chào bạn, tôi là Guardian, Kiến trúc sư Hệ thống.
+Chào bạn, tôi là Guardian.
 
-Tôi đã tiến hành một đợt phân tích sâu rộng trên toàn bộ kho lưu trữ. Tôi không thể thực thi trực tiếp các lệnh `git diff` hay `git log`, nhưng dựa trên trạng thái các file bạn cung cấp và đối chiếu với các chỉ đạo trước, tôi đã xác định được các bước tiếp theo để nâng cấp hệ thống của chúng ta lên một tầm cao mới về **an toàn, khả năng quan sát và tính nhất quán kiến trúc**.
+Tôi đã hoàn tất việc rà soát toàn bộ mã nguồn và các bảng tri thức (PKB) sau khi Coder hoàn thành xuất sắc nhiệm vụ `task-017`. Lớp Tương tác (Interaction Layer) đã được triển khai, tạo ra một nền tảng vững chắc cho việc kiểm soát và ghi nhật ký các hành vi của hệ thống.
 
 ### 1\. Đánh giá Trạng thái Hiện tại và Chỉ đạo Tiếp theo
 
-Tôi xác nhận các chỉ đạo gần đây nhất (`task-015`, `task-016`) về việc chuẩn hóa API và triển khai lớp xác thực đầu vào đã được Coder thực hiện. Các `struct Add` và phương thức `validate()` đã được đưa vào, tạo ra một vành đai phòng thủ đầu tiên.
+Hệ thống của chúng ta hiện đã đạt được sự nhất quán cao về mặt cấu trúc. Tuy nhiên, qua phân tích, tôi nhận thấy một khoảng trống lớn: **Khả năng quan sát (Observability)**.
 
-Tuy nhiên, kiến trúc hiện tại vẫn còn một điểm yếu cốt lõi: các tương tác với hệ thống (như thêm một task, một memory) vẫn là các lời gọi hàm trực tiếp. Cách tiếp cận này thiếu một lớp trừu tượng trung gian, gây khó khăn cho việc:
+Chúng ta đã xây dựng các công cụ mạnh mẽ trong `repository` để đo lường hiệu suất (`Metric`, `Registry`) và tối ưu hóa (`Cache`, `Pool`), nhưng chúng vẫn đang ở trạng thái "ngủ đông" và chưa được kích hoạt hoàn toàn trong lớp `Sled`. Hệ thống của chúng ta, dù được thiết kế tốt, vẫn đang hoạt động như một "hộp đen". Chúng ta không thể trả lời các câu hỏi hiệu suất cốt lõi như:
 
-1.  **Ghi nhật ký có cấu trúc (Structured Auditing):** Chúng ta không có một cách nhất quán để ghi lại *mọi* hành động được yêu cầu, các tham số của nó, và kết quả thực thi. Điều này làm cho việc truy vết các vấn đề tiềm ẩn hoặc các "mặt tối" trong luồng logic trở nên khó khăn.
-2.  **Kiểm soát tập trung (Centralized Control):** Các logic như xác thực, cấp quyền (trong tương lai), và ghi nhật ký bị phân tán.
-3.  **Tái sử dụng Framework:** Chúng ta chưa có một "framework" thực sự cho việc xử lý các yêu cầu nghiệp vụ.
+  - Tốc độ thực thi trung bình của một thao tác `insert` hay `query` là bao nhiêu?
+  - Tỷ lệ lỗi của các thao tác với cơ sở dữ liệu là gì?
+  - Có điểm nghẽn (bottleneck) nào đang hình thành khi dữ liệu tăng lên không?
 
-**Quyết định Kiến trúc:** Chúng ta sẽ giới thiệu một **Lớp Tương tác (Interaction Layer)** dựa trên **Mẫu thiết kế Command**. Thay vì gọi trực tiếp các hàm nghiệp vụ, lớp giao diện (CLI) sẽ tạo ra các "lệnh" (Commands) đại diện cho một ý định. Các lệnh này sẽ được gói trong một ngữ cảnh "tương tác" (Interaction) có thể được ghi lại, xác thực, và xử lý một cách nhất quán.
+Thêm vào đó, công cụ `naming` để kiểm tra sức khỏe kiến trúc và quy tắc đặt tên vẫn đang là một tiến trình độc lập. Nó cần được tích hợp vào luồng công việc chính của hệ thống như một khả năng nội tại.
+
+**Quyết định Kiến trúc:** Chúng ta sẽ kích hoạt toàn bộ **Khung Quan sát Hiệu suất (Performance Observability Framework)** đã được xây dựng và tích hợp công cụ kiểm tra kiến trúc vào CLI chính. Điều này sẽ biến hệ thống từ một cấu trúc được thiết kế tốt thành một hệ thống "sống" - một hệ thống có thể tự nhận thức và báo cáo về chính hiệu suất và sức khỏe của nó.
 
 ### 2\. Yêu cầu Cải tiến Chi tiết cho Coder
 
 **Gửi Coder:**
 
-Hãy triển khai một Lớp Tương tác có cấu trúc để thay thế cho các lời gọi hàm trực tiếp, nhằm tăng cường khả năng quan sát, an toàn và tính nhất quán cho toàn bộ hệ thống.
+Hãy kích hoạt toàn bộ khả năng quan sát hiệu suất của hệ thống và tích hợp công cụ phân tích kiến trúc để hoàn thiện vòng đời phát triển và giám sát.
 
-**Mục tiêu:** Tái cấu trúc hệ thống để mọi yêu cầu nghiệp vụ được đóng gói thành một đối tượng `Interaction` chứa một `Command` cụ thể. Điều này sẽ tạo ra một framework xử lý yêu cầu có thể tái sử dụng và kiểm soát chặt chẽ.
+**Mục tiêu:** Kích hoạt các module `metric`, `cache`, `pool` đang "ngủ đông" trong `repository::sled` và tích hợp `naming` crate vào `knowledge` CLI để cung cấp khả năng giám sát hiệu suất và kiểm tra kiến trúc một cách toàn diện.
 
-**Nhiệm vụ 1: Nâng cấp Hệ thống Lỗi để Báo cáo Validation Chi tiết hơn**
+-----
 
-Để hỗ trợ lớp tương tác mới, chúng ta cần một cơ chế báo lỗi xác thực mạnh mẽ hơn.
+**Nhiệm vụ 1: Kích hoạt Khung Quan sát Hiệu suất trong `repository`**
 
-1.  **Tạo `ValidationError` Struct**: Trong file `crates/repository/src/error.rs`, định nghĩa một struct mới để mô tả một lỗi xác thực cụ thể.
+Lõi của `repository` đã có sẵn các công cụ cần thiết, nhưng chúng đang bị vô hiệu hóa bởi `#[allow(dead_code)]` trong `repository/src/sled.rs`. Nhiệm vụ của bạn là đưa chúng vào hoạt động.
 
-    ```rust
-    // THÊM VÀO crates/repository/src/error.rs
-    use thiserror::Error; // Đảm bảo thiserror đã được import
+1.  **Kích hoạt Metrics:** Trong `crates/repository/src/sled.rs`, tìm và xóa tất cả các dòng `#[allow(dead_code)]`. Sau đó, sử dụng hàm `with_metric` đã có để bọc các thao tác lõi.
 
-    /// Đại diện cho một lỗi xác thực cụ thể cho một trường.
-    #[derive(Error, Debug, Clone)]
-    #[error("lỗi trường '{field}': {message}")]
-    pub struct ValidationError {
-        pub field: String,
-        pub message: String,
-    }
-    ```
-
-2.  **Cập nhật `Error` Enum**: Thay đổi biến thể `Error::Validation` để nó có thể chứa một danh sách các `ValidationError`.
-
-    ```rust
-    // THAY THẾ biến thể Validation trong crates/repository/src/error.rs
-    #[derive(Error, Debug)]
-    pub enum Error {
-        // ... các biến thể khác ...
-
-        /// Được trả về khi đầu vào không hợp lệ, chứa một danh sách các lỗi cụ thể.
-        #[error("dữ liệu không hợp lệ")]
-        Validation(Vec<ValidationError>), // THAY ĐỔI: Chứa một Vec các lỗi
-
-        // ... các biến thể khác ...
-    }
-    ```
-
-**Nhiệm vụ 2: Xây dựng Nền tảng "Interaction" trong `shared`**
-
-Đây là trái tim của framework mới.
-
-1.  **Tạo file `crates/shared/src/interaction.rs`**:
-
-    ```rust
-    // NỘI DUNG CỦA FILE MỚI: crates/shared/src/interaction.rs
-    use repository::{self, Id};
-    use std::fmt::Debug;
-    use std::time::SystemTime;
-
-    /// Một trait đánh dấu một struct là một lệnh có thể thực thi.
-    /// Mọi lệnh phải định nghĩa kiểu dữ liệu Output của nó.
-    pub trait Command: Debug {
-        type Output;
-    }
-
-    /// Đóng gói một Command với các metadata cho việc ghi nhật ký và truy vết.
-    #[derive(Debug)]
-    pub struct Interaction<C: Command> {
-        /// ID duy nhất cho mỗi lần tương tác.
-        pub id: Id,
-        /// Thời điểm tương tác được tạo ra.
-        pub timestamp: SystemTime,
-        /// Lệnh cụ thể được yêu cầu.
-        pub command: C,
-    }
-
-    impl<C: Command> Interaction<C> {
-        pub fn new(command: C) -> Self {
-            Self {
-                id: Id::new_v4(),
-                timestamp: SystemTime::now(),
-                command,
-            }
-        }
-    }
-    ```
-
-2.  **Tái xuất module**: Trong file `crates/shared/src/lib.rs`, tái xuất module mới này.
-
-    ```rust
-    // THÊM VÀO crates/shared/src/lib.rs
-    pub mod interaction;
-    ```
-
-**Nhiệm vụ 3: Tái cấu trúc `knowledge::task` thành một "Module Tương tác"**
-
-Chúng ta sẽ áp dụng framework mới này cho `task` đầu tiên.
-
-1.  **Biến `Add` Struct thành một `Command`**: Mở `crates/knowledge/src/task.rs`.
-
-    ```rust
-    // TRONG crates/knowledge/src/task.rs
-    use shared::interaction::Command; // Import Command
-
-    // ... định nghĩa struct Add ...
-
-    // Triển khai Command cho Add
-    impl Command for Add {
-        type Output = Entry; // Kết quả trả về sau khi thêm thành công là một Entry
-    }
-
-    // Cập nhật phương thức validate để trả về Vec<ValidationError>
-    impl Add {
-        pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
-            let mut errors = Vec::new();
-            if self.task.trim().is_empty() {
-                errors.push(ValidationError {
-                    field: "task".to_string(),
-                    message: "Mô tả công việc không được để trống.".to_string(),
-                });
-            }
-            if self.task.len() > 256 {
-                errors.push(ValidationError {
-                    field: "task".to_string(),
-                    message: "Mô tả công việc không được vượt quá 256 ký tự.".to_string(),
-                });
-            }
-            // ... Thêm các kiểm tra khác cho các trường còn lại ...
-
-            if errors.is_empty() {
+      * **Ví dụ cho `insert`:**
+        ```rust
+        // TRONG aync fn insert CỦA impl Storage for Sled
+        async fn insert<E: Entity>(&self, entity: E) -> Result<(), Error> 
+        where E::Key: Debug, E::Index: Debug
+        {
+            // BỌC LOGIC HIỆN TẠI BẰNG with_metric
+            self.with_metric("insert", async move {
+                debug!("Đang tạo tác vụ blocking cho thao tác chèn");
+                let db = self.clone();
+                // Logic spawn_blocking giữ nguyên bên trong
+                spawn_blocking(move || db.insert(&entity)).await??;
+                debug!("Tác vụ chèn hoàn thành");
                 Ok(())
-            } else {
-                Err(errors)
+            }).await
+        }
+        ```
+      * **Áp dụng tương tự** cho các hàm `fetch`, `update`, `delete`, `query`, và `mass`. Điều này sẽ tự động thu thập thời gian thực thi và trạng thái lỗi cho mọi thao tác.
+
+2.  **Tạo Lệnh `stats`:** Thêm một subcommand mới vào `knowledge` CLI để hiển thị các số liệu thống kê đã thu thập.
+
+      * **Thêm vào `Commands` enum** trong `crates/knowledge/src/main.rs`:
+        ```rust
+        // TRONG enum Commands
+        #[derive(Subcommand)]
+        enum Commands {
+            // ... các lệnh khác
+            /// Hiển thị số liệu thống kê hiệu suất của kho lưu trữ
+            Stats,
+        }
+        ```
+      * **Thêm logic xử lý** trong `main()`:
+        ```rust
+        // TRONG hàm main()
+        match cli.command {
+            // ... các nhánh khác
+            Commands::Stats => {
+                let stats = store.metric.stats().await;
+                println!("--- Repository Performance Stats ---");
+                println!("{}", stats);
             }
         }
-    }
-    ```
-
-2.  **Tái cấu trúc Hàm `add` thành `handle_add`**: Vẫn trong `crates/knowledge/src/task.rs`, đổi tên và thay đổi signature của hàm `add` để nó nhận vào một `Interaction`.
-
-    ```rust
-    // THAY THẾ hàm add cũ bằng hàm handle_add mới TRONG crates/knowledge/src/task.rs
-    use shared::interaction::Interaction;
-    use tracing::info;
-
-    pub async fn handle_add<S: Storage>(store: &S, interaction: Interaction<Add>) -> Result<Entry, Error> {
-        info!(interaction_id = %interaction.id, command = ?interaction.command, "Đang xử lý lệnh AddTask");
-        
-        // 1. Xác thực
-        interaction.command.validate().map_err(Error::Validation)?;
-        
-        // 2. Gọi logic nghiệp vụ cốt lõi
-        let result = task::add(
-            store,
-            interaction.command.context,
-            interaction.command.module,
-            interaction.command.task,
-            interaction.command.priority,
-            interaction.command.status,
-            interaction.command.assignee,
-            interaction.command.due,
-            interaction.command.notes,
-        ).await;
-
-        // 3. Ghi nhật ký kết quả
-        match &result {
-            Ok(entry) => info!(interaction_id = %interaction.id, task_id = %entry.id, "Hoàn thành xử lý AddTask"),
-            Err(e) => tracing::error!(interaction_id = %interaction.id, error = ?e, "Xử lý AddTask thất bại"),
+        ```
+      * **Lưu ý:** Bạn cần làm cho trường `metric` trong `Sled` struct trở nên `pub` để có thể truy cập từ `main.rs`.
+        ```rust
+        // SỬA ĐỔI TRONG crates/repository/src/sled.rs
+        pub struct Sled {
+            // ...
+            pub metric: Registry, // Chuyển thành pub
         }
-        
-        result
-    }
+        ```
 
-    // Xóa hoặc comment lại hàm `add` cũ để tránh nhầm lẫn.
-    ```
+-----
 
-3.  **Cập nhật `knowledge/src/main.rs`**: Sửa đổi CLI để tạo và gửi `Interaction`.
+**Nhiệm vụ 2: Tích hợp `naming` vào `knowledge` CLI**
 
-    ```rust
-    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Task::Add
-    use shared::interaction::Interaction; // Import ở đầu file
+Thay vì chạy `naming` như một binary riêng, chúng ta sẽ tích hợp nó như một tính năng của `knowledge` để tuân thủ quyết định kiến trúc `mem-008`.
 
-    // ...
-    Task::Add { ... } => {
-        let priority_enum = task::Priority::try_from(priority)?;
-        let status_enum = task::Status::try_from(status)?;
-        
-        // Tạo command
-        let command = task::Add {
-            context, module, task: task_desc,
-            priority: priority_enum, status: status_enum,
-            assignee, due, notes,
-        };
-        
-        // Đóng gói thành Interaction
-        let interaction = Interaction::new(command);
-        
-        // Gọi handler mới
-        let entry = task::handle_add(&store, interaction).await?;
-        println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
-    }
-    // ...
-    ```
+1.  **Thêm `naming` làm dependency** cho `knowledge` trong `crates/knowledge/Cargo.toml`.
+2.  **Xóa Binary của `naming`**: Xóa file `crates/naming/src/bin/main.rs` để loại bỏ điểm vào dư thừa.
+3.  **Thêm Lệnh `check`**: Thêm một subcommand mới vào `knowledge` CLI để thực thi việc kiểm tra.
+      * **Thêm vào `Commands` enum** trong `crates/knowledge/src/main.rs`:
+        ```rust
+        // TRONG enum Commands
+        #[derive(Subcommand)]
+        enum Commands {
+            // ... các lệnh khác
+            /// Phân tích mã nguồn để kiểm tra vi phạm quy tắc đặt tên
+            Check {
+                /// Đường dẫn đến file hoặc thư mục cần kiểm tra
+                path: String,
+            },
+        }
+        ```
+      * **Thêm logic xử lý** trong `main()`:
+        ```rust
+        // TRONG hàm main()
+        match cli.command {
+            // ... các nhánh khác
+            Commands::Check { path } => {
+                println!("Bắt đầu kiểm tra quy tắc đặt tên cho: {}", path);
+                match naming::process(&path, "naming.toml") {
+                    Ok((metrics, details)) => {
+                        // Sử dụng report của naming để in ra kết quả
+                        if let Err(e) = naming::rules::report::md(&metrics, "naming_report.md") {
+                            eprintln!("Lỗi khi tạo báo cáo MD: {}", e);
+                        }
+                        println!("Kiểm tra hoàn tất. Báo cáo được tạo tại: naming_report.md");
+                        // (Tùy chọn) In một bản tóm tắt ra console
+                    }
+                    Err(e) => {
+                        eprintln!("Lỗi trong quá trình kiểm tra: {}", e);
+                    }
+                }
+            }
+        }
+        ```
 
-**Nhiệm vụ 4: Lặp lại Pattern cho `memories` và `architecture`**
+-----
 
-Áp dụng chính xác quy trình 3 bước tương tự cho `knowledge::memories` và `knowledge::architecture`:
+**Nhiệm vụ 3: Chuẩn hóa Rust Edition**
 
-1.  **Implement `Command`** cho các struct `memories::Add` và `architecture::Add`.
-2.  **Cập nhật `validate()`** của chúng để trả về `Result<(), Vec<ValidationError>>`.
-3.  **Đổi tên hàm** `add` thành `handle_add` và cập nhật signature để nhận `Interaction<...>` tương ứng.
-4.  **Thêm logic ghi nhật ký** vào đầu và cuối các handler mới.
-5.  **Cập nhật `main.rs`** để tạo `Interaction` và gọi các handler mới cho `Memories::Add` và `Architecture::Add`.
+Tôi phát hiện một sự thiếu nhất quán nhỏ. Crate `shared` đang sử dụng `edition = "2024"`, trong khi toàn bộ workspace được chuẩn hóa trên `edition = "2021"`.
+
+1.  **Sửa `Cargo.toml`**: Trong file `crates/shared/Cargo.toml`, hãy thay đổi dòng `edition = "2024"` thành `edition = "2021"`.
+
+-----
 
 ### 3\. Cập nhật PKB
 
-Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiến trúc này và giao nhiệm vụ cho bạn.
+Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiến trúc quan trọng này và giao nhiệm vụ cho bạn.
 
 **`memories.csv` (Mục mới được đề xuất)**
 
 ```csv
-"mem-011","Decision","System","All","Implement a structured Interaction Layer using the Command pattern","Direct function calls from the UI to business logic lack a centralized point for control, auditing, and structured logging. This poses a risk to observability and makes implementing cross-cutting concerns difficult.","Replaced direct function calls with a Command pattern. A shared 'Interaction' struct now wraps all business logic 'Commands' (e.g., AddTask, AddMemory). This wrapper contains metadata like a unique ID and timestamp. Facade functions were refactored into 'Handlers' that process these Interactions, enabling structured logging and validation at a single entry point.","This architectural shift massively improves system observability and auditability by creating a structured, loggable record for every attempted action. It decouples the UI from the business logic and provides a consistent, reusable framework for handling all future commands, enhancing security and maintainability."
+"mem-012","Decision","System","repository, knowledge, naming","Activate Full System Observability and Architectural Health Checks","The system had robust but inactive observability tools (metrics, cache, pool) and a disconnected architectural checker (naming tool). This prevented performance monitoring and integrated quality control.","1. Activated the performance metrics framework within repository::sled by wrapping all database operations (insert, fetch, query, etc.) in the existing `with_metric` helper. 2. Exposed these metrics via a new `knowledge stats` CLI command. 3. Integrated the `naming` crate as a library, exposed via a `knowledge check` command, and removed its separate binary. 4. Standardized Rust edition across all crates.","This architectural enhancement transforms the system from a 'black box' into a fully observable platform, enabling real-time performance analysis and proactive bottleneck detection. Integrating the naming check unifies the development toolchain, reinforcing architectural integrity directly within the main application workflow and completing our vision of a self-aware system."
 ```
 
 **`todo.csv` (Nhiệm vụ mới)**
 
 ```csv
-"task-017","Refactor","System","Implement a structured Interaction Layer","High","Open","Coder","","1. Enhance `repository::Error` to support `Vec<ValidationError>`. 2. Create the `Interaction`/`Command` framework in `crates/shared`. 3. Refactor `knowledge::task` to use the new framework (impl Command for Add, rename add->handle_add, update main.rs). 4. Apply the same pattern to `knowledge::memories`. 5. Apply the same pattern to `knowledge::architecture`. 6. Ensure all validation methods are updated and all tests pass."
+"task-018","Feature","System","Activate Full System Observability","High","Open","Coder","","1. In `repository::sled`, remove `#[allow(dead_code)]` and wrap all async Storage methods in `with_metric`. 2. Make `Sled.metric` public. 3. Add a `knowledge stats` CLI command to display metrics. 4. Integrate the `naming` crate into the `knowledge` CLI via a `check` command and remove the `naming` binary. 5. Change Rust edition in `shared/Cargo.toml` to '2021'."
 ```
 
-Đây là một bước nhảy vọt về kiến trúc, không chỉ là một thay đổi nhỏ. Nó sẽ đặt nền móng cho một hệ thống vững chắc, an toàn và dễ kiểm soát hơn rất nhiều. Hãy tiến hành một cách cẩn trọng.
+Đây là bước cuối cùng để biến hệ thống của chúng ta từ một cấu trúc được thiết kế tốt thành một hệ thống 'sống' và có thể tự giám sát. Hãy thực hiện cẩn thận.

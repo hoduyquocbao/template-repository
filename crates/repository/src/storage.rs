@@ -10,6 +10,7 @@
 use async_trait::async_trait; // Cho phép định nghĩa trait với hàm async
 use std::fmt::Debug; // Đảm bảo các khóa/chỉ mục có thể debug dễ dàng
 use crate::{Error, entity::{Entity, Query}}; // Import các định nghĩa lỗi, trait Entity và struct Query
+use serde; // Import serde module
 
 /// Hợp đồng cho bất kỳ cơ chế lưu trữ nào muốn làm việc với framework.
 /// 
@@ -23,14 +24,14 @@ pub trait Storage: Send + Sync { // Trait phải thread-safe để dùng trong m
     /// Thuật toán: Có thể dùng transaction, cache, hoặc ghi trực tiếp tuỳ backend.
     /// Thành tựu: Đảm bảo tính mở rộng và nhất quán khi thêm dữ liệu.
     async fn insert<E: Entity>(&self, entity: E) -> Result<(), Error>
-    where E::Key: Debug, E::Index: Debug;
+    where E::Key: Debug + serde::Serialize, E::Index: Debug;
 
     /// Lấy một thực thể bằng khóa chính.
     /// Mục đích: Cho phép truy xuất nhanh một thực thể duy nhất.
     /// Thuật toán: Có thể dùng cache, index, hoặc truy vấn trực tiếp backend.
     /// Thành tựu: Đảm bảo khả năng truy xuất hiệu quả và chính xác.
     async fn fetch<E: Entity>(&self, key: E::Key) -> Result<Option<E>, Error>
-    where E::Key: Debug;
+    where E::Key: Debug + serde::Serialize;
 
     /// Cập nhật một thực thể dựa trên hàm biến đổi (transform).
     /// Mục đích: Cho phép cập nhật nguyên tử một thực thể với logic tuỳ biến.
@@ -39,14 +40,14 @@ pub trait Storage: Send + Sync { // Trait phải thread-safe để dùng trong m
     async fn update<E: Entity, F>(&self, key: E::Key, transform: F) -> Result<E, Error>
     where
         F: FnOnce(E) -> E + Send + 'static, // Hàm biến đổi phải thread-safe
-        E::Key: Debug;
+        E::Key: Debug + serde::Serialize;
 
     /// Xóa một thực thể khỏi backend lưu trữ.
     /// Mục đích: Đảm bảo mọi backend đều hỗ trợ xóa dữ liệu.
     /// Thuật toán: Xóa theo khoá chính, có thể kết hợp xóa index/phụ trợ.
     /// Thành tựu: Đảm bảo dữ liệu không còn tồn tại và không rò rỉ index.
     async fn delete<E: Entity>(&self, key: E::Key) -> Result<E, Error>
-    where E::Key: Debug;
+    where E::Key: Debug + serde::Serialize;
 
     /// Truy vấn một danh sách các bản tóm tắt dưới dạng một stream iterator.
     /// Mục đích: Hỗ trợ truy vấn hiệu quả với phân trang, tiền tố, và giới hạn.
@@ -61,7 +62,7 @@ pub trait Storage: Send + Sync { // Trait phải thread-safe để dùng trong m
     /// Thuật toán: Chia lô, dùng transaction, hoặc ghi tuần tự tuỳ backend.
     /// Thành tựu: Đảm bảo hiệu năng cao và an toàn bộ nhớ khi thao tác dữ liệu lớn.
     async fn mass<E: Entity>(&self, iter: Box<dyn Iterator<Item = E> + Send>) -> Result<(), Error>
-    where E::Key: Debug, E::Index: Debug;
+    where E::Key: Debug + serde::Serialize, E::Index: Debug;
     
     /// Hàm trợ giúp cho benchmark - lấy các khóa chỉ mục (chỉ bật khi test/benchmark).
     /// Mục đích: Hỗ trợ kiểm thử hiệu năng và xác minh hoạt động index.

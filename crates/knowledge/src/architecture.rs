@@ -1,6 +1,6 @@
 //! Module quản lý các bản ghi kiến trúc thông qua `architecture` crate.
 
-use repository::error::ValidationError;
+use repository::error::Fault;
 use repository::{Error, Storage};
 use architecture::{self, Entry}; // Chỉ import Arch, không import Summary hay đổi tên
 use shared;
@@ -28,22 +28,22 @@ impl Command for Add {
 }
 
 impl Add {
-    pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+    pub fn validate(&self) -> Result<(), Vec<Fault>> {
         let mut errors = Vec::new();
         if self.name.trim().is_empty() {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "name".to_string(),
                 message: "Tên không được để trống.".to_string(),
             });
         }
         if self.name.len() > 128 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "name".to_string(),
                 message: "Tên không được vượt quá 128 ký tự.".to_string(),
             });
         }
         if self.context.len() > 64 || self.module.len() > 64 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "context/module".to_string(),
                 message: "Ngữ cảnh và module không được vượt quá 64 ký tự.".to_string(),
             });

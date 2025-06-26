@@ -78,18 +78,29 @@ fn extract(line: &str, config: &Config) -> Option<(String, &'static str)> {
     for (re, kind) in PATTERNS.iter() {
         if let Some(cap) = re.captures(trimmed) {
             let name = cap.get(cap.len()-1).unwrap().as_str().to_string();
+            // Whitelist luôn bỏ qua (ưu tiên tuyệt đối)
+            if let Some(white) = &config.whitelist {
+                if white.iter().any(|w| w == &name) {
+                    return None;
+                }
+            }
             // Blacklist luôn báo lỗi
             if let Some(black) = &config.blacklist {
                 if black.iter().any(|b| b == &name) {
                     return Some((name, "Blacklist"));
                 }
             }
-            // Whitelist luôn bỏ qua
-            if let Some(white) = &config.whitelist {
-                if white.iter().any(|w| w == &name) {
+            // Chỉ báo lỗi PascalCase nếu nhiều hub (>=2)
+            if *kind == "PascalCase" {
+                if text::hub(&name) > 1 {
+                    // Vi phạm: PascalCase nhiều hub
+                    return Some((name, *kind));
+                } else {
+                    // Hợp lệ: PascalCase một hub
                     return None;
                 }
             }
+            // Các pattern khác giữ nguyên
             return Some((name, *kind));
         }
     }

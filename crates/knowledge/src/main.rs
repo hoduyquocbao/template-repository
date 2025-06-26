@@ -12,6 +12,9 @@ use knowledge::display;
 use shared::Showable;
 use shared::interaction::Interaction;
 
+// Thêm ở đầu file:
+// use naming::process;
+// use naming::rules::report;
 
 /// Hệ thống quản lý tri thức kiến trúc và phát triển.
 #[derive(Parser)]
@@ -41,6 +44,13 @@ enum Commands {
     Task {
         #[command(subcommand)]
         command: Task, // ĐÃ ĐỔI TÊN TỪ TaskCmd THÀNH Task
+    },
+    /// Hiển thị số liệu thống kê hiệu suất của kho lưu trữ
+    Stats,
+    /// Phân tích mã nguồn để kiểm tra vi phạm quy tắc đặt tên
+    Check {
+        /// Đường dẫn đến file hoặc thư mục cần kiểm tra
+        path: String,
     },
     // Lệnh cho Director để khởi tạo các luồng nghiệp vụ (sẽ được implement sau)
     // Direct {
@@ -344,13 +354,13 @@ async fn main() -> Result<(), repository::Error> {
                 due,
                 notes,
             } => {
-                let priority_enum = task::Priority::try_from(priority)?;
-                let status_enum = task::Status::try_from(status)?;
+                let priority = task::Priority::try_from(priority)?;
+                let status = task::Status::try_from(status)?;
                 
                 // Tạo command
                 let command = task::Add {
                     context, module, task: task_desc,
-                    priority: priority_enum, status: status_enum,
+                    priority, status,
                     assignee, due, notes,
                 };
                 
@@ -405,6 +415,24 @@ async fn main() -> Result<(), repository::Error> {
                 println!("Đã thay đổi công việc: [{}], {}", task.id, task.task);
             }
         },
+        Commands::Stats => {
+            println!("Tính năng thống kê hiệu suất sẽ được cập nhật sau khi refactor actor pattern hoàn chỉnh.");
+        }
+        Commands::Check { path } => {
+            println!("Bắt đầu kiểm tra quy tắc đặt tên cho: {}", path);
+            println!("Chưa tích hợp module naming, vui lòng kiểm tra lại dependency hoặc import.");
+            // match naming::process(&path, "naming.toml") {
+            //     Ok((metrics, details)) => {
+            //         if let Err(e) = naming::rules::report::md(&metrics, "naming_report.md") {
+            //             eprintln!("Lỗi khi tạo báo cáo MD: {}", e);
+            //         }
+            //         println!("Kiểm tra hoàn tất. Báo cáo được tạo tại: naming_report.md");
+            //     }
+            //     Err(e) => {
+            //         eprintln!("Lỗi trong quá trình kiểm tra: {}", e);
+            //     }
+            // }
+        }
         // Commands::Direct { command } => {
         //     // Logic cho Director sẽ được thêm vào đây
         // }

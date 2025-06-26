@@ -47,4 +47,11 @@ pub fn cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 pub fn dup(s: &str, n: usize) -> String {
     s.repeat(n)
+}
+
+/// Đếm số hub (ký tự viết hoa) trong định danh PascalCase
+/// Theo quy tắc: PascalCase nhiều hub (>=2) là vi phạm, một hub thì hợp lệ
+/// Ví dụ: UserProfile (2 hub, vi phạm), User (1 hub, hợp lệ)
+pub fn hub(name: &str) -> usize {
+    name.chars().filter(|c| c.is_uppercase()).count()
 } 

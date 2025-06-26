@@ -1,6 +1,6 @@
 //! Module quản lý các bản ghi bộ nhớ thông qua `memories` crate.
 
-use repository::error::ValidationError;
+use repository::error::Fault;
 use repository::{Error, Id, Storage};
 pub use memories::{Entry, Kind, Summary};
 use shared;
@@ -25,28 +25,28 @@ impl Command for Add {
 }
 
 impl Add {
-    pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
+    pub fn validate(&self) -> Result<(), Vec<Fault>> {
         let mut errors = Vec::new();
         if self.subject.trim().is_empty() {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "subject".to_string(),
                 message: "Chủ đề không được để trống.".to_string(),
             });
         }
         if self.subject.len() > 256 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "subject".to_string(),
                 message: "Chủ đề không được vượt quá 256 ký tự.".to_string(),
             });
         }
         if self.context.len() > 64 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "context".to_string(),
                 message: "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
             });
         }
         if self.module.len() > 64 {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "module".to_string(),
                 message: "Module không được vượt quá 64 ký tự.".to_string(),
             });
@@ -55,7 +55,7 @@ impl Add {
             || self.decision.len() > 4096
             || self.rationale.len() > 4096
         {
-            errors.push(ValidationError {
+            errors.push(Fault {
                 field: "description".to_string(),
                 message: "Mô tả, Quyết định, và Lý do không được vượt quá 4096 ký tự.".to_string(),
             });
@@ -105,14 +105,14 @@ pub async fn list<S: Storage>(
     kind: Option<String>,
     limit: usize,
 ) -> Result<Box<dyn Iterator<Item = Result<memories::Summary, repository::Error>> + Send>, repository::Error> {
-    let prefix_vec = match kind {
+    let prefix = match kind {
         Some(s) => {
             let kind = Kind::try_from(s)?;
             vec![(&kind).into()]
         }
         None => Vec::new(),
     };
-    let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
+    let query = shared::query(prefix, None::<Vec<u8>>, limit);
     memories::query(store, query).await
 }
 

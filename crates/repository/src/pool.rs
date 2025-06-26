@@ -7,7 +7,7 @@
 // Import các thư viện cần thiết cho pool: chia sẻ ownership, đồng bộ hóa, và lỗi hệ thống
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use crate::error::{Error, ValidationError};
+use crate::error::{Error, Fault};
 
 /// Pool quản lý các kết nối database
 /// Mục đích: Tối ưu hóa việc tái sử dụng kết nối, giảm chi phí khởi tạo mới
@@ -39,7 +39,7 @@ impl<T: Clone + Send + Sync + 'static> Pool<T> {
     /// Mục đích: Đảm bảo không vượt quá số lượng kết nối tối đa
     /// Thuật toán: acquire semaphore, trả về bản sao kết nối đầu tiên (demo, có thể mở rộng round-robin)
     pub async fn get(&self) -> Result<T, Error> {
-        let _permit = self.sem.acquire().await.map_err(|_| Error::Validation(vec![ValidationError {
+        let _permit = self.sem.acquire().await.map_err(|_| Error::Validation(vec![Fault {
             field: "pool".to_string(),
             message: "Không thể lấy permit từ semaphore.".to_string()
         }]))?;

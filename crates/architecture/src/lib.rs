@@ -55,7 +55,7 @@ impl TryFrom<String> for Kind {
             "event" => Ok(Kind::Event),
             "command" => Ok(Kind::Command),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Validation(vec![repository::error::ValidationError {
+            _ => Err(Error::Validation(vec![repository::error::Fault {
                 field: "kind".to_string(),
                 message: format!("Loại '{}' không hợp lệ.", s),
             }])),
@@ -199,7 +199,8 @@ mod tests {
     }
 
     #[test]
-    fn add_and_update() {
+    // Kiểm tra tổng hợp các chức năng thêm và cập nhật (gốc: add_and_update)
+    fn features() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();
@@ -217,23 +218,23 @@ mod tests {
             let found = find(&store, added.key()).await.unwrap().unwrap();
             assert_eq!(found.responsibility, "Coord");
 
-            let entry_updated = Entry {
+            let item = Entry {
                 id: Id::new_v4(),
                 responsibility: "NewCoord".to_string(), // Thay đổi responsibility
                 ..entry1 // Giữ nguyên các trường khác
             };
 
-            let updated = add(&store, entry_updated).await.unwrap(); // Sử dụng add để upsert
+            let updated = add(&store, item).await.unwrap();
             assert_eq!(updated.responsibility, "NewCoord");
-            assert_eq!(updated.key(), added.key()); // Key không đổi
+            assert_eq!(updated.key(), added.key());
 
             let loaded = find(&store, added.key()).await.unwrap().unwrap();
-            assert_eq!(loaded.responsibility, "NewCoord"); // Xác nhận đã update
+            assert_eq!(loaded.responsibility, "NewCoord");
         });
     }
 
     #[test]
-    fn remove_test() { // Đổi tên hàm để tránh trùng lặp với hàm `remove`
+    fn clear() { // Đổi tên hàm để tránh trùng lặp với hàm `remove`
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();
@@ -253,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn query_summaries() {
+    fn list() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();

@@ -26,8 +26,8 @@ pub type Detail = (String, Option<usize>, String, String);
 
 pub fn measure<F1, F2>(
     file: &str,
-    line_fn: F1,
-    ast_fn: F2,
+    line: F1,
+    ast: F2,
 ) -> (Metric, Vec<Detail>)
 where
     F1: FnOnce() -> Result<Vec<(Option<usize>, String, &'static str)>, String>,
@@ -41,13 +41,13 @@ where
     let before = sys.used_memory();
     let start = Instant::now();
     
-    let line = Instant::now();
-    let lres = line_fn();
-    metric.line = line.elapsed();
+    let time = Instant::now();
+    let lres = line();
+    metric.line = time.elapsed();
     
-    let ast_i = Instant::now();
-    let ares = ast_fn();
-    metric.ast = ast_i.elapsed();
+    let now = Instant::now();
+    let ares = ast();
+    metric.ast = now.elapsed();
     
     metric.total = start.elapsed();
     sys.refresh_memory();

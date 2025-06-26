@@ -5,11 +5,11 @@ use crate::rules::metric::{Metric, Detail};
 use crate::helper::file;
 
 // Tích hợp cảnh báo, thống kê, config động vào pipeline kiểm tra
-pub fn run(files: Vec<String>, conf_path: &str) {
+pub fn run(files: Vec<String>, path: &str) {
     let mut warn = Warn::new();
     let mut stat = Stat::new();
     let mut conf = Conf::new();
-    conf.load(conf_path);
+    conf.load(path);
     let n = files.len() as u64;
     for file in &files {
         let t0 = std::time::Instant::now();
@@ -57,7 +57,7 @@ pub fn run(files: Vec<String>, conf_path: &str) {
 }
 
 // Tích hợp tự động phát hiện folder/file cho pipeline
-pub fn auto(input: &str, conf_path: &str) {
+pub fn auto(input: &str, path: &str) {
     let mut files = vec![];
     if file::dir(input) {
         let mut v = vec![];
@@ -68,7 +68,7 @@ pub fn auto(input: &str, conf_path: &str) {
     } else if file::file(input) {
         files.push(input.to_string());
     }
-    run(files, conf_path);
+    run(files, path);
 }
 
 /// Processes a given file or directory path to check for naming violations.
@@ -80,7 +80,7 @@ pub fn auto(input: &str, conf_path: &str) {
 /// # Arguments
 ///
 /// * `path` - A string slice that holds the path to the file or directory.
-/// * `_conf` - A string slice for the configuration file (currently unused).
+/// * `conf` - A string slice for the configuration file (currently unused).
 ///
 /// # Returns
 ///
@@ -116,13 +116,13 @@ pub fn process(path: &str, _conf: &str) -> Result<(Vec<Metric>, Vec<Detail>), St
     });
 
     let results: Vec<_> = rx.iter().collect();
-    let mut all_metrics = Vec::with_capacity(results.len());
-    let mut all_details = Vec::new();
+    let mut metrics = Vec::with_capacity(results.len());
+    let mut details = Vec::new();
 
-    for (metric, details) in results {
-        all_metrics.push(metric);
-        all_details.extend(details);
+    for (metric, detail) in results {
+        metrics.push(metric);
+        details.extend(detail);
     }
     
-    Ok((all_metrics, all_details))
+    Ok((metrics, details))
 }

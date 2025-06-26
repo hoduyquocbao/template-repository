@@ -11,7 +11,7 @@ use thiserror::Error; // thiserror: Chuẩn hóa và đơn giản hóa việc đ
 /// Đại diện cho một lỗi xác thực cụ thể cho một trường.
 #[derive(Error, Debug, Clone)]
 #[error("lỗi trường '{field}': {message}")]
-pub struct ValidationError {
+pub struct Fault {
     pub field: String,
     pub message: String,
 }
@@ -30,7 +30,7 @@ pub enum Error {
 
     /// Được trả về khi đầu vào không hợp lệ, chứa một danh sách các lỗi cụ thể.
     #[error("dữ liệu không hợp lệ")]
-    Validation(Vec<ValidationError>),
+    Validation(Vec<Fault>),
 
     /// Lỗi từ lớp lưu trữ cơ bản (sled).
     /// Mục đích: Bọc lỗi từ backend lưu trữ, giúp trace nguồn gốc lỗi.

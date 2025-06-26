@@ -18,6 +18,7 @@ pub mod pool;       // Module quản lý pool kết nối, tối ưu concurrency
 pub mod cache;      // Module cache, tăng tốc truy xuất thực thể
 pub mod metric;     // Module thu thập metric, quan sát hiệu năng
 pub mod time;       // THÊM MỚI: Module tiện ích thời gian
+pub mod actor;      // Module actor, mới tạo
 
 // --- Tái xuất các thành phần cốt lõi ---
 // Mục đích: Tạo API gọn gàng, giúp người dùng chỉ cần import từ crate gốc

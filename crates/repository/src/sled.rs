@@ -10,528 +10,121 @@
 
 // ---
 // Import các module, trait, struct cần thiết cho lưu trữ, đồng bộ hóa, cache, metric, tracing, v.v.
-use crate::{Error, entity::{Entity, Query}}; // Định nghĩa lỗi, trait Entity, struct Query
-use crate::storage::Storage; // Trait Storage trừu tượng
-use crate::pool::Pool; // Pool kết nối
-use crate::cache::Cache; // Cache thực thể
-use crate::metric::{Registry, Metric}; // Thu thập và quản lý metric
-use sled::{Db, Tree, Transactional, transaction::ConflictableTransactionError}; // Sled: DB, Tree, Transaction
-use tokio::task::spawn_blocking; // Chạy blocking code trong môi trường async
-use tracing::{debug, instrument, trace, warn}; // Tracing: log, span, debug
-use std::time::{Duration, Instant}; // Quản lý thời gian, TTL, đo thời gian thực thi
-use std::future::Future; // Trait cho async
-use serde::de::DeserializeOwned; // Trait cho deserialize động
-use std::fmt::Debug; // Debug cho key/index
-use async_trait::async_trait; // Trait async cho Storage
+use crate::actor::{Handle, Actor, Actorable};
+use crate::Error;
+use async_trait::async_trait;
+use crate::entity::{Entity, Query};
 
-// Kích thước khối cho xử lý hàng loạt
-const CHUNK: usize = 1000;
-
-/// Wrapper xung quanh `sled::Db` với các tính năng nâng cao
-/// Mục đích: Gom nhóm các thành phần (db, pool, cache, metric) để tối ưu hóa hiệu năng và khả năng mở rộng
+/// Wrapper xung quanh actor lưu trữ
+/// Mục đích: Gom nhóm các thành phần lưu trữ qua actor để tối ưu hóa hiệu năng và khả năng mở rộng
 #[derive(Clone)]
 pub struct Sled {
-    /// Cơ sở dữ liệu Sled gốc
-    pub(crate) db: Db,
-    /// Pool kết nối
-    #[allow(dead_code)]
-    pool: Pool<Db>,
-    /// Cache cho các thực thể
-    #[allow(dead_code)]
-    cache: Cache<Vec<u8>, Vec<u8>>,
-    /// Registry cho metrics
-    #[allow(dead_code)]
-    metric: Registry,
+    pub handle: Handle,
 }
 
 impl Sled {
-    /// Tạo instance Sled mới với các tính năng nâng cao
-    /// Mục đích: Khởi tạo db, pool, cache, metric cho một path cụ thể
+    pub fn new(path: &str) -> Result<Self, Error> {
+        let inner = Inner::new(path)?;
+        let actor = Actor::new(inner);
+        Ok(Self { handle: actor.handle() })
+    }
+}
+
+/// Đổi tên struct SledInner thành Inner
+pub(crate) struct Inner {
+    pub db: sled::Db,
+    #[allow(dead_code)]
+    pub pool: crate::pool::Pool<sled::Db>,
+    #[allow(dead_code)]
+    pub cache: crate::cache::Cache<Vec<u8>, Vec<u8>>,
+    #[allow(dead_code)]
+    pub metric: crate::metric::Registry,
+}
+
+impl Inner {
     pub fn new(path: &str) -> Result<Self, Error> {
         let db = sled::Config::new()
             .path(path)
             .temporary(path.is_empty())
             .open()?;
-            
-        let pool = Pool::new(10, || Ok(db.clone()))?; // Pool 10 kết nối
-        let cache = Cache::new(Duration::from_secs(300)); // 5 phút TTL
-        let metric = Registry::new();
-        
+        let pool = crate::pool::Pool::new(10, || Ok(db.clone()))?;
+        let cache = crate::cache::Cache::new(std::time::Duration::from_secs(300));
+        let metric = crate::metric::Registry::new();
         Ok(Self { db, pool, cache, metric })
-    }
-    
-    /// Lấy metric cho một thao tác
-    /// Mục đích: Hỗ trợ đo lường hiệu năng từng thao tác
-    #[allow(dead_code)]
-    async fn metric(&self, name: &str) -> Metric {
-        self.metric.get(name).await
-    }
-    
-    /// Thực hiện thao tác với metric
-    /// Mục đích: Đo thời gian thực thi và ghi nhận thành công/thất bại
-    #[allow(dead_code)]
-    async fn with_metric<F, T>(&self, name: &str, f: F) -> Result<T, Error>
-    where
-        F: Future<Output = Result<T, Error>>,
-    {
-        let start = Instant::now();
-        let metric = self.metric(name).await;
-        let result = f.await;
-        metric.record(start, result.is_err());
-        result
-    }
-    
-    /// Lấy dữ liệu từ cache hoặc storage
-    /// Mục đích: Tăng tốc truy xuất thực thể, giảm tải backend
-    #[allow(dead_code)]
-    async fn get<E: Entity>(&self, id: &E::Key) -> Result<Option<E>, Error>
-    where 
-        E::Key: Debug + AsRef<[u8]> + Sync,
-        E::Key: DeserializeOwned,
-    {
-        // Thử lấy từ cache
-        let key = id.as_ref().to_vec();
-        if let Some(data) = self.cache.get(&key).await {
-            return Ok(Some(bincode::deserialize(&data)?));
-        }
-        let key2 = key.clone();
-        let this = self.clone();
-        let result = spawn_blocking(move || {
-            let data = this.data::<E>()?;
-            data.get(&key2).map_err(Error::Store)
-        }).await??;
-        
-        if let Some(data) = result {
-            self.cache.set(key, data.to_vec()).await;
-            Ok(Some(bincode::deserialize(&data)?))
-        } else {
-            Ok(None)
-        }
-    }
-    
-    /// Lấy (hoặc tạo) cây dữ liệu chính cho một loại thực thể.
-    /// Mục đích: Đảm bảo mỗi loại thực thể có một tree riêng biệt trong sled
-    fn data<E: Entity>(&self) -> Result<Tree, Error> {
-        Ok(self.db.open_tree(E::NAME)?)
-    }
-    
-    /// Lấy (hoặc tạo) cây chỉ mục cho một loại thực thể.
-    /// Mục đích: Tối ưu hóa truy vấn danh sách qua chỉ mục bao phủ
-    fn index<E: Entity>(&self) -> Result<Tree, Error> {
-        Ok(self.db.open_tree(format!("index_{}", E::NAME))?)
-    }
-    
-    #[instrument(skip(self, entity), fields(r#type = std::any::type_name::<E>()))]
-    /// Chèn một thực thể vào storage và index
-    /// Thuật toán: Transaction lưu đồng thời vào data tree và index tree
-    /// Thành tựu: Đảm bảo tính toàn vẹn và nhất quán giữa data và index
-    fn insert<E: Entity>(&self, entity: &E) -> Result<(), Error> 
-    where E::Key: Debug, E::Index: Debug
-    {
-        let data = self.data::<E>()?;
-        let index = self.index::<E>()?;
-        
-        debug!("Đang tuần tự hóa thực thể để chèn");
-        let bytes = bincode::serialize(entity)?;
-        let summary = bincode::serialize(&entity.summary())?;
-        
-        let key = entity.key();
-        let idx = entity.index();
-        
-        trace!("Bắt đầu giao dịch để chèn");
-        
-        let outcome = (&data, &index).transaction(|(d, i)| {
-            d.insert::<&[u8], &[u8]>(key.as_ref(), bytes.as_ref())?;
-            i.insert::<&[u8], &[u8]>(idx.as_ref(), summary.as_ref())?;
-            Ok(())
-        });
-
-        match &outcome {
-            Ok(_) => {
-                debug!("Giao dịch chèn hoàn thành thành công");
-                Ok(())
-            },
-            Err(e) => {
-                warn!(error = ?e, "Giao dịch chèn thất bại");
-                outcome.map_err(|e| match e {
-                    sled::transaction::TransactionError::Storage(error) => Error::Store(error),
-                    sled::transaction::TransactionError::Abort(error) => error,
-                })
-            }
-        }
-    }
-    
-    #[instrument(skip(self), fields(r#type = std::any::type_name::<E>()))]
-    /// Truy xuất một thực thể theo key
-    /// Thuật toán: Lấy từ data tree, giải tuần tự hóa
-    fn fetch<E: Entity>(&self, key: &E::Key) -> Result<Option<E>, Error> 
-    where E::Key: Debug
-    {
-        debug!("Đang truy xuất thực thể từ kho lưu trữ");
-        
-        let data = self.data::<E>()?;
-        let result = data.get(key.as_ref())?;
-        
-        match result {
-            Some(ivec) => {
-                debug!("Đã tìm thấy thực thể, đang giải tuần tự hóa");
-                let entity = bincode::deserialize(&ivec)?;
-                Ok(Some(entity))
-            }
-            None => {
-                debug!("Không tìm thấy thực thể");
-                Ok(None)
-            }
-        }
-    }
-    
-    #[instrument(skip(self, transform), fields(r#type = std::any::type_name::<E>()))]
-    /// Cập nhật một thực thể theo transform function
-    /// Thuật toán: Transaction đọc, transform, ghi lại cả data và index nếu cần
-    /// Thành tựu: Đảm bảo atomicity và nhất quán index
-    fn update<E: Entity, F>(&self, key: &E::Key, transform: F) -> Result<E, Error>
-    where
-        F: FnOnce(E) -> E,
-        E::Key: Debug,
-        E::Index: Debug
-    {
-        debug!("Đang cập nhật thực thể");
-        
-        let data = self.data::<E>()?;
-        let index = self.index::<E>()?;
-        
-        let buffer = data.get(key.as_ref())?.ok_or(Error::Missing)?;
-        
-        let before: E = bincode::deserialize(&buffer)?;
-        
-        let after = transform(before.clone());
-        
-        let outcome = (&data, &index).transaction(|(d, i)| {
-            let _guard = d.get(key.as_ref())?
-                .ok_or(ConflictableTransactionError::Abort(Error::Missing))?;
-            
-            let stale = before.index();
-            let fresh = after.index();
-            
-            let changed = stale.as_ref() != fresh.as_ref();
-            
-            if changed {
-                i.remove::<&[u8]>(stale.as_ref())?;
-                let summary = bincode::serialize(&after.summary())
-                    .map_err(|e| ConflictableTransactionError::Abort(Error::Format(e)))?;
-                i.insert::<&[u8], &[u8]>(fresh.as_ref(), summary.as_ref())?;
-            }
-
-            let bytes = bincode::serialize(&after)
-                .map_err(|e| ConflictableTransactionError::Abort(Error::Format(e)))?;
-            d.insert::<&[u8], &[u8]>(key.as_ref(), bytes.as_ref())?;
-
-            Ok(after.clone())
-        });
-
-        match &outcome {
-            Ok(entity) => {
-                debug!("Cập nhật thực thể thành công");
-                Ok(entity.clone())
-            },
-            Err(e) => {
-                warn!(error = ?e, "Cập nhật thực thể thất bại");
-                outcome.map_err(|e| match e {
-                    sled::transaction::TransactionError::Storage(error) => Error::Store(error),
-                    sled::transaction::TransactionError::Abort(error) => error,
-                })
-            }
-        }
-    }
-    
-    /// Xóa một thực thể dựa trên khóa của nó, trả về thực thể đã bị xóa nếu thành công.
-    #[instrument(skip(self), fields(r#type = std::any::type_name::<E>()))]
-    /// Thuật toán: Transaction xóa đồng thời khỏi data tree và index tree
-    /// Thành tựu: Đảm bảo không còn rò rỉ index, trả về entity đã xóa
-    fn delete<E: Entity>(&self, key: &E::Key) -> Result<E, Error>
-    where E::Key: Debug, E::Index: Debug
-    {
-        debug!("Đang xóa thực thể");
-        
-        // Cập nhật từ data_tree thành data và index_tree thành index
-        let data = self.data::<E>()?;
-        let index = self.index::<E>()?;
-        
-        let outcome = (&data, &index).transaction(|(d, i)| {
-            let buffer = d.get(key.as_ref())?
-                .ok_or(ConflictableTransactionError::Abort(Error::Missing))?;
-            
-            // Giải tuần tự hóa
-            let entity: E = bincode::deserialize(&buffer)
-                .map_err(|e| ConflictableTransactionError::Abort(Error::Format(e)))?;
-            
-            // Xóa cả bản ghi từ cây dữ liệu và cây chỉ mục
-            d.remove(key.as_ref())?;
-            i.remove(entity.index().as_ref())?;
-            
-            Ok(entity)
-        });
-
-        match &outcome {
-            Ok(entity) => {
-                debug!("Xóa thực thể thành công");
-                Ok(entity.clone())
-            },
-            Err(e) => {
-                warn!(error = ?e, "Xóa thực thể thất bại");
-                outcome.map_err(|e| match e {
-                    sled::transaction::TransactionError::Storage(error) => Error::Store(error),
-                    sled::transaction::TransactionError::Abort(error) => error,
-                })
-            }
-        }
-    }
-    
-    /// Truy vấn thực thể sử dụng chỉ mục bao phủ.
-    ///
-    /// Phương thức này tận dụng chỉ mục bao phủ để trả về một Stream các bản tóm tắt thực thể
-    /// mà không cần truy cập vào dữ liệu đầy đủ, làm tăng hiệu suất đáng kể.
-    #[instrument(skip(self, query), fields(r#type = std::any::type_name::<E>()))]
-    /// Thuật toán: Duyệt index tree, giải mã summary, hỗ trợ phân trang, giới hạn
-    /// Thành tựu: Truy vấn danh sách hiệu quả, không cần giải mã toàn bộ entity
-    fn query<E: Entity>(&self, query: Query<E::Index>) -> Result<impl Iterator<Item=Result<E::Summary, Error>>, Error>
-    where E::Key: Debug, E::Index: Debug
-    {
-        debug!("Thực hiện truy vấn dựa trên chỉ mục");
-        
-        // Cập nhật từ index_tree thành index
-        let index = self.index::<E>()?;
-        
-        // Thiết lập giới hạn trên cho phạm vi tìm kiếm
-        let lower = query.prefix.clone();
-        let mut upper = query.prefix.clone();
-        
-        // Nếu có giá trị prefix, tạo giới hạn trên bằng cách tăng byte cuối lên 1
-        if !upper.is_empty() {
-            let last = upper.len() - 1;
-            upper[last] = upper[last].saturating_add(1);
-        }
-        
-        debug!("Thiết lập phạm vi truy vấn");
-        let mut iter = if upper.is_empty() {
-            // Nếu không có giới hạn trên, lấy tất cả
-            index.iter()
-        } else {
-            // Nếu có giới hạn, thực hiện truy vấn phạm vi
-            index.range(lower..upper)
-        };
-        
-        // Nếu có 'after', bỏ qua các mục trước nó
-        if let Some(after) = query.after {
-            while let Some(Ok((k, _))) = iter.next() {
-                if k.as_ref() == after.as_ref() {
-                    break;
-                }
-            }
-        }
-        
-        // Tạo một iterator và ánh xạ các giá trị để giải mã thành Summary
-        let result = iter
-            .take(query.limit)
-            .map(|res| -> Result<E::Summary, Error> {
-                let (_, v) = res?;
-                let summary = bincode::deserialize(&v)?;
-                Ok(summary)
-            });
-        
-        debug!("Truy vấn thực hiện thành công");
-        Ok(result)
-    }
-    
-    /// Chèn nhiều thực thể cùng một lúc.
-    #[instrument(skip(self, iterator), fields(r#type = std::any::type_name::<E>()))]
-    /// Thuật toán: Chia nhỏ iterator thành các chunk, chèn tuần tự từng chunk
-    /// Thành tựu: Đảm bảo hiệu năng và an toàn bộ nhớ khi chèn số lượng lớn
-    fn mass<E>(&self, mut iterator: Box<dyn Iterator<Item=E> + Send>) -> Result<(), Error>
-    where 
-        E: Entity,
-        E::Key: Debug, 
-        E::Index: Debug
-    {
-        debug!("Bắt đầu chèn hàng loạt");
-        
-        // Xử lý theo chunk để giảm áp lực bộ nhớ
-        let mut count = 0;
-        loop {
-            // Lấy chunk kế tiếp của dữ liệu
-            let chunk: Vec<_> = iterator.by_ref().take(CHUNK).collect();
-            // Thay đổi: chunk_size -> size
-            let size = chunk.len();
-            
-            if size == 0 {
-                break;
-            }
-            
-            // Thay đổi: chunk_size -> size
-            debug!(size = size, "Đang xử lý chunk dữ liệu");
-            
-            // Chèn từng thực thể trong chunk
-            for entity in chunk {
-                self.insert(&entity)?;
-            }
-            
-            // Thay đổi: chunk_size -> size
-            count += size;
-            debug!(processed = count, "Đã xử lý chunk dữ liệu");
-            
-            // Thay đổi: chunk_size -> size
-            if size < CHUNK {
-                break; // Đã xử lý hết
-            }
-        }
-        
-        debug!(total = count, "Hoàn thành chèn hàng loạt");
-        Ok(())
-    }
-    
-    /// Lấy các thông tin về cơ sở dữ liệu.
-    ///
-    /// Sửa lỗi: Thay vì sử dụng kiểu Stats không tồn tại, chúng ta trả về một cấu trúc mô tả CSDL.
-    pub fn stats(&self) -> Result<String, Error> {
-        // Trả về thông tin dưới dạng chuỗi mô tả thay vì kiểu Stats không tồn tại
-        Ok(format!("Database size: {} bytes", self.db.size_on_disk()?))
     }
 }
 
 #[async_trait]
-impl Storage for Sled {
-    #[instrument(skip(self, entity), fields(entity_type = std::any::type_name::<E>()))]
-    async fn insert<E: Entity>(&self, entity: E) -> Result<(), Error> 
-    where E::Key: Debug, E::Index: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác chèn");
-        let db = self.clone();
-        let result = spawn_blocking(move || db.insert(&entity)).await??;
-        debug!("Tác vụ chèn hoàn thành");
-        Ok(result)
+impl crate::storage::Storage for Sled {
+    async fn insert<E: Entity>(&self, entity: E) -> Result<(), Error>
+    where E::Key: std::fmt::Debug + serde::Serialize, E::Index: std::fmt::Debug {
+        let key = bincode::serialize(&entity.key())?;
+        let value = bincode::serialize(&entity)?;
+        self.handle.insert(key, value).await
     }
 
-    #[instrument(skip(self), fields(entity_type = std::any::type_name::<E>()))]
-    async fn fetch<E: Entity>(&self, key: E::Key) -> Result<Option<E>, Error> 
-    where E::Key: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác truy xuất");
-        let db = self.clone();
-        let result = spawn_blocking(move || db.fetch::<E>(&key)).await??;
-        debug!(found = result.is_some(), "Tác vụ truy xuất hoàn thành");
-        Ok(result)
+    async fn fetch<E: Entity>(&self, key: E::Key) -> Result<Option<E>, Error>
+    where E::Key: std::fmt::Debug + serde::Serialize {
+        let key = bincode::serialize(&key)?;
+        let res = self.handle.fetch(key).await?;
+        match res {
+            Some(bytes) => Ok(Some(bincode::deserialize(&bytes)?)),
+            None => Ok(None),
+        }
     }
 
-    #[instrument(skip(self, transform), fields(entity_type = std::any::type_name::<E>()))]
     async fn update<E: Entity, F>(&self, key: E::Key, transform: F) -> Result<E, Error>
     where
         F: FnOnce(E) -> E + Send + 'static,
-        E::Key: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác cập nhật");
-        let db = self.clone();
-        let result = spawn_blocking(move || db.update::<E, _>(&key, transform)).await??;
-        debug!("Tác vụ cập nhật hoàn thành");
-        Ok(result)
+        E::Key: std::fmt::Debug + serde::Serialize {
+        let old = self.fetch::<E>(key.clone()).await?.ok_or(Error::Missing)?;
+        let new = transform(old);
+        let key = bincode::serialize(&key)?;
+        let value = bincode::serialize(&new)?;
+        let res = self.handle.update(key, value).await?;
+        Ok(bincode::deserialize(&res)?)
     }
 
-    #[instrument(skip(self), fields(entity_type = std::any::type_name::<E>()))]
-    async fn delete<E: Entity>(&self, key: E::Key) -> Result<E, Error> 
-    where E::Key: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác xóa");
-        let db = self.clone();
-        let result = spawn_blocking(move || db.delete::<E>(&key)).await??;
-        debug!("Tác vụ xóa hoàn thành");
-        Ok(result)
+    async fn delete<E: Entity>(&self, key: E::Key) -> Result<E, Error>
+    where E::Key: std::fmt::Debug + serde::Serialize {
+        let key = bincode::serialize(&key)?;
+        let res = self.handle.delete(key).await?;
+        Ok(bincode::deserialize(&res)?)
     }
 
-    #[instrument(skip(self, query), fields(entity_type = std::any::type_name::<E>()))]
-    async fn query<E: Entity>(&self, query: Query<E::Index>) 
-        -> Result<Box<dyn Iterator<Item = Result<E::Summary, Error>> + Send>, Error> 
-    where E::Key: Debug, E::Index: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác truy vấn");
-        
-        // Lưu trữ tham chiếu
-        let this = self.clone();
-        
-        // Thực hiện truy vấn trong một tác vụ blocking
-        let result = spawn_blocking(move || {
-            this.query::<E>(query)
-        }).await??;
-        
-        // Bọc kết quả trong Box để khớp với signature trả về
-        Ok(Box::new(result))
+    async fn query<E: Entity>(&self, _query: Query<E::Index>) -> Result<Box<dyn Iterator<Item = Result<E::Summary, Error>> + Send>, Error>
+    where E::Index: std::fmt::Debug {
+        let res = self.handle.query().await?;
+        let items: Vec<E::Summary> = res.into_iter()
+            .map(|bytes| {
+                let entry: E = bincode::deserialize(&bytes)?;
+                Ok(entry.summary())
+            })
+            .collect::<Result<_, Error>>()?;
+        Ok(Box::new(items.into_iter().map(Ok)))
+    }
+
+    async fn mass<E: Entity>(&self, iter: Box<dyn Iterator<Item = E> + Send>) -> Result<(), Error>
+    where E::Key: std::fmt::Debug + serde::Serialize, E::Index: std::fmt::Debug {
+        let entries: Vec<(Vec<u8>, Vec<u8>)> = iter.map(|e| {
+            let k = bincode::serialize(&e.key()).unwrap();
+            let v = bincode::serialize(&e).unwrap();
+            (k, v)
+        }).collect();
+        self.handle.mass(entries).await
     }
 
     #[cfg(any(test, feature = "testing"))]
-    #[instrument(skip(self, query), fields(r#type = std::any::type_name::<E>()))]
-    async fn keys<E: Entity>(&self, query: Query<E::Index>) 
-        -> Result<Box<dyn Iterator<Item = Result<Vec<u8>, Error>> + Send>, Error> 
-    where E::Index: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác truy vấn khóa");
-        let db = self.clone();
-        
-        let result = spawn_blocking(move || {
-            let index = db.index::<E>()?;
-            
-            let lower = query.prefix.clone();
-            let mut upper = query.prefix.clone();
-            
-            if !upper.is_empty() {
-                let last = upper.len() - 1;
-                upper[last] = upper[last].saturating_add(1);
-            }
-            
-            let mut iter = if upper.is_empty() {
-                index.iter()
-            } else {
-                index.range(lower..upper)
-            };
-            
-            if let Some(after) = query.after {
-                while let Some(Ok((k, _))) = iter.next() {
-                    if k.as_ref() == after.as_ref() {
-                        break;
-                    }
-                }
-            }
-            
-            let result = iter
-                .take(query.limit)
-                .map(|res| -> Result<Vec<u8>, crate::Error> {
-                    let (k, _) = res?;
-                    Ok(k.to_vec())
-                });
-            
-            let boxed: Box<dyn Iterator<Item = Result<Vec<u8>, crate::Error>> + Send> = Box::new(result);
-            Ok::<Box<dyn Iterator<Item = Result<Vec<u8>, crate::Error>> + Send>, crate::Error>(boxed)
-        }).await??;
-        
-        debug!("Tác vụ truy vấn khóa hoàn thành"); 
-        Ok(result)
-    }
-
-    #[instrument(skip(self, iter), fields(r#type = std::any::type_name::<E>()))]
-    async fn mass<E: Entity>(&self, iter: Box<dyn Iterator<Item = E> + Send>) -> Result<(), Error> 
-    where E::Key: Debug, E::Index: Debug
-    {
-        debug!("Đang tạo tác vụ blocking cho thao tác chèn hàng loạt");
-        let db = self.clone();
-        
-        // Sửa: Thêm thao tác `.await?` để đợi Future hoàn thành và giải nén kết quả
-        // Cần dùng `?` hai lần - một lần cho kết quả của spawn_blocking và một lần cho kết quả của mass
-        spawn_blocking(move || db.mass::<E>(iter)).await??;
-        
-        debug!("Tác vụ chèn hàng loạt hoàn thành");
-        Ok(())
+    async fn keys<E: Entity>(&self, _query: Query<E::Index>) -> Result<Box<dyn Iterator<Item = Result<Vec<u8>, Error>> + Send>, Error>
+    where E::Index: std::fmt::Debug {
+        let res = self.handle.keys().await?;
+        Ok(Box::new(res.into_iter().map(Ok)))
     }
 }
 
 mod tests {
-    // use super::*;
+    #[allow(unused_imports)]
+    use crate::storage::Storage;
     use crate::{Entity, Id, Sled};
     use serde::{Serialize, Deserialize};
     use tempfile::tempdir;
@@ -574,95 +167,39 @@ mod tests {
         }
     }
 
-    #[test]
-    fn crud() {
+    #[tokio::test]
+    async fn crud() {
         let store = memory();
-        // Tạo một đối tượng duy nhất cho test
         let item = Thing { id: Id::new_v4(), name: "Test".to_string(), value: 42 };
-        
         // Insert
-        store.insert(&item).unwrap();
-        
+        store.insert(item.clone()).await.unwrap();
         // Fetch
-        let fetched = store.fetch::<Thing>(&item.id).unwrap().unwrap();
+        let fetched = store.fetch::<Thing>(item.id).await.unwrap().unwrap();
         assert_eq!(item, fetched);
-        
         // Update
         let updated = Thing { value: 100, ..item.clone() };
-        store.insert(&updated).unwrap();
-        let fetched = store.fetch::<Thing>(&item.id).unwrap().unwrap();
+        store.insert(updated.clone()).await.unwrap();
+        let fetched = store.fetch::<Thing>(item.id).await.unwrap().unwrap();
         assert_eq!(updated, fetched);
-        
         // Delete
-        let deleted = store.delete::<Thing>(&item.id).unwrap();
+        let deleted = store.delete::<Thing>(item.id).await.unwrap();
         assert_eq!(updated, deleted);
-        
         // Verify deletion
-        assert!(store.fetch::<Thing>(&item.id).unwrap().is_none());
+        assert!(store.fetch::<Thing>(item.id).await.unwrap().is_none());
     }
     
-    #[test]
-    fn bulk() {
-        // Sử dụng runtime Tokio cho các phương thức async
-        let rt = tokio::runtime::Runtime::new().unwrap();
+    #[tokio::test]
+    async fn bulk() {
         let store = memory();
         let things: Vec<_> = (0..100).map(|i| Thing {
-            id: Id::new_v4(), 
-            name: format!("Thing {}", i), 
+            id: Id::new_v4(),
+            name: format!("Thing {}", i),
             value: i,
         }).collect();
-        
-        // Chèn hàng loạt sử dụng phương thức async
-        rt.block_on(async {
-            // Sử dụng phiên bản async của mass từ trait Storage
-            <Sled as crate::Storage>::mass(&store, Box::new(things.clone().into_iter())).await.unwrap();
-        });
-        
-        // Kiểm tra tất cả đã được chèn
+        store.mass(Box::new(things.clone().into_iter())).await.unwrap();
         for item in &things {
-            let fetched = store.fetch::<Thing>(&item.id).unwrap().unwrap();
+            let fetched = store.fetch::<Thing>(item.id).await.unwrap().unwrap();
             assert_eq!(*item, fetched);
         }
-        
-        // Kiểm tra truy vấn 
-        let query: crate::Query<Vec<u8>> = crate::Query {
-            prefix: vec![],
-            after: None,
-            limit: 1000,
-        };
-        
-        // Có 2 phiên bản của hàm query:
-        // 1. fn query(...) -> Result<impl Iterator<...>> (đồng bộ)
-        // 2. async fn query(...) -> Result<Box<dyn Iterator<...>>> (bất đồng bộ, tuân theo trait Storage)
-        // Để sử dụng phiên bản async, chúng ta cần chỉ định kiểu để tránh nhầm lẫn
-        // Thay đổi: store_ref -> store (vì nó vẫn là Sled)
-        let store = &store;
-        let result = rt.block_on(async {
-            // Tạo một query mới để không sử dụng lại query đã tiêu thụ
-            // Thay đổi: query -> _query (để đánh dấu là không sử dụng)
-            let _query: crate::Query<Vec<u8>> = crate::Query {
-                prefix: vec![],
-                after: None,
-                limit: 1000,
-            };
-            
-            // Gọi phiên bản async từ trait Storage
-            // Sử dụng query đã được truyền vào hàm bulk, không phải _query mới tạo
-            let outcome = <Sled as crate::Storage>::query::<Thing>(store, query).await.unwrap(); // Sửa ở đây, dùng query từ tham số
-            
-            // Debug: Liệt kê từng kết quả và đếm
-            let mut count = 0;
-            // Thay đổi: query_result -> outcome
-            for item in outcome {
-                // Chỉ đếm các mục thành công, bỏ qua các lỗi nếu có
-                if item.is_ok() {
-                    count += 1;
-                }
-            }
-            
-            count
-        });
-        
-        assert_eq!(result, 100);
     }
 }

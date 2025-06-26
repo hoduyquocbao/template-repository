@@ -2,7 +2,7 @@
 //! Dữ liệu được lưu trữ thông qua `repository::Storage` để tăng hiệu suất.
 
 use serde::{Deserialize, Serialize};
-use repository::{error::ValidationError, now, Entity, Error, Id, Key, Query, Storage};
+use repository::{error::Fault, now, Entity, Error, Id, Key, Query, Storage};
 use shared::{Showable, Filterable};
 use tracing::{info, warn};
 
@@ -39,7 +39,7 @@ impl TryFrom<String> for Kind {
             "lesson" => Ok(Kind::Lesson),
             "refactor" => Ok(Kind::Refactor),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Validation(vec![ValidationError {
+            _ => Err(Error::Validation(vec![Fault {
                 field: "kind".to_string(),
                 message: format!("Loại '{}' không hợp lệ.", s),
             }])),
@@ -143,7 +143,7 @@ pub async fn add<S: Storage>(
     // Kiểm tra các trường bắt buộc
     if context.trim().is_empty() || module.trim().is_empty() || subject.trim().is_empty() {
         warn!("Thiếu thông tin bắt buộc khi thêm bộ nhớ");
-        return Err(Error::Validation(vec![ValidationError {
+        return Err(Error::Validation(vec![Fault {
             field: "context/module/subject".to_string(),
             message: "Context, Module, và Subject không được để trống.".to_string(),
         }]));
@@ -207,7 +207,8 @@ mod tests {
     }
 
     #[test]
-    fn add_and_find() {
+    // Kiểm tra tổng hợp các chức năng chính: thêm, tìm, ... (gốc: add_and_find)
+    fn features() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();
@@ -230,7 +231,8 @@ mod tests {
     }
 
     #[test]
-    fn query_summaries() {
+    // Kiểm tra truy vấn danh sách summary (gốc: query_summaries)
+    fn list() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let store = memory();
@@ -248,8 +250,8 @@ mod tests {
                 ).await.unwrap();
             }
 
-            let all_results = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
-            let mut summaries: Vec<_> = all_results.collect::<Result<Vec<_>, _>>().unwrap();
+            let items = query(&store, Query { prefix: Vec::new(), after: None, limit: 10 }).await.unwrap();
+            let mut summaries: Vec<_> = items.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(summaries.len(), 5);
             summaries.sort_by(|a, b| b.created.cmp(&a.created));
             assert_eq!(summaries[0].subject, "Subject4");

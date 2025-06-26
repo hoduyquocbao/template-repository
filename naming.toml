@@ -1,2 +1,5 @@
-whitelist = ["Id", "API", "JSON"]
+whitelist = [
+    
+    "visit_item", "Id", "API", "JSON", "TryFrom", "try_from", "Serialize", "serialize", "Deserialize", "deserialize", "Debug", "debug", "Clone", "clone", "PartialEq", "partialeq", "Eq", "eq", "Result", "result", "Error", "error", "Option", "option", "Iterator", "iterator", "Send", "send", "Sync", "sync", "From", "from", "Into", "into", "Default", "default", "String", "string", "Vec", "vec", "Box", "box", "HashMap", "hashmap", "Uuid", "uuid", "now", "bincode", "sled", "tokio", "async_trait", "tempdir"
+]
 blacklist = ["UserProfile", "parseInputData"] 

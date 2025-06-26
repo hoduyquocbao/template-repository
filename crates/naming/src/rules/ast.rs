@@ -17,13 +17,22 @@ pub fn scan(file: &str, config: &Config) -> Result<Vec<Violation>, String> {
         violations: Vec::new(),
     };
     visitor.visit_file(&ast);
-    // Kiểm tra duplicate identifier
+    // Kiểm tra duplicate identifier, bỏ qua nếu nằm trong whitelist
     let mut counts = std::collections::HashMap::new();
+    let whitelist: Vec<String> = config.whitelist.clone().unwrap_or_default();
     for v in &visitor.violations {
+        // Nếu nằm trong whitelist thì bỏ qua
+        if whitelist.iter().any(|w| w == &v.name) {
+            continue;
+        }
         *counts.entry(&v.name).or_insert(0) += 1;
     }
     let mut all = visitor.violations.clone();
     for v in &visitor.violations {
+        // Nếu nằm trong whitelist thì bỏ qua duplicate
+        if whitelist.iter().any(|w| w == &v.name) {
+            continue;
+        }
         if let Some(c) = counts.get(&v.name) {
             if *c > 1 {
                 all.push(Violation {
@@ -43,8 +52,8 @@ struct Visitor<'a> {
 }
 
 impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
-    fn visit_item(&mut self, i: &'ast Item) {
-        match i {
+    fn visit_item(&mut self, item: &'ast Item) {
+        match item {
             Item::Struct(ItemStruct { ident, fields, .. }) => {
                 self.check(ident, "PascalCase");
                 for f in fields {
@@ -66,6 +75,14 @@ impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
             }
             Item::Fn(ItemFn { sig, .. }) => {
                 self.check(&sig.ident, "Fn");
+                // Kiểm tra tham số hàm
+                for input in &sig.inputs {
+                    if let syn::FnArg::Typed(pat_type) = input {
+                        if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                            self.check(&ident.ident, "Param");
+                        }
+                    }
+                }
             }
             Item::Const(ItemConst { ident, .. }) => {
                 self.check(ident, "Const");
@@ -77,6 +94,14 @@ impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
                 for impl_item in items {
                     if let ImplItem::Fn(m) = impl_item {
                         self.check(&m.sig.ident, "Method");
+                        // Kiểm tra tham số method
+                        for input in &m.sig.inputs {
+                            if let syn::FnArg::Typed(pat_type) = input {
+                                if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                                    self.check(&ident.ident, "Param");
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -85,13 +110,23 @@ impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
             }
             _ => {}
         }
-        syn::visit::visit_item(self, i);
+        syn::visit::visit_item(self, item);
     }
 }
 
 impl<'a> Visitor<'a> {
     fn check(&mut self, ident: &syn::Ident, kind: &'static str) {
         let name = ident.to_string();
+        // Bỏ qua định danh bắt đầu bằng '_' (suppress warning)
+        if name.starts_with('_') {
+            return;
+        }
+        // Whitelist luôn bỏ qua (ưu tiên tuyệt đối)
+        if let Some(white) = &self.config.whitelist {
+            if white.iter().any(|w| w == &name) {
+                return;
+            }
+        }
         if let Some(black) = &self.config.blacklist {
             if black.iter().any(|b| b == &name) {
                 self.violations.push(Violation {
@@ -99,11 +134,6 @@ impl<'a> Visitor<'a> {
                     name,
                     kind: "Blacklist",
                 });
-                return;
-            }
-        }
-        if let Some(white) = &self.config.whitelist {
-            if white.iter().any(|w| w == &name) {
                 return;
             }
         }
