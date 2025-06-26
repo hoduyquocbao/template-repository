@@ -9,6 +9,7 @@ use tracing::info;
 use knowledge::{architecture, memories, task};
 use knowledge::task::Status;
 use knowledge::display;
+use shared::Showable;
 
 /// Hệ thống quản lý tri thức kiến trúc và phát triển.
 #[derive(Parser)]
@@ -149,7 +150,23 @@ enum Memories { // ĐÃ ĐỔI TÊN
 #[derive(Subcommand)]
 enum Task { // ĐÃ ĐỔI TÊN
     /// Thêm một công việc mới
-    Add { text: String },
+    Add {
+        task: String,
+        #[arg(long, default_value = "")]
+        context: String,
+        #[arg(long, default_value = "")]
+        module: String,
+        #[arg(long, default_value = "Medium")]
+        priority: String,
+        #[arg(long, default_value = "Open")]
+        status: String,
+        #[arg(long, default_value = "")]
+        assignee: String,
+        #[arg(long, default_value = "")]
+        due: String,
+        #[arg(long, default_value = "")]
+        notes: String,
+    },
     /// Lấy một công việc bằng ID
     Get { id: Id },
     /// Đánh dấu một công việc là đã hoàn thành
@@ -172,6 +189,14 @@ enum Task { // ĐÃ ĐỔI TÊN
         /// Số lượng tối đa hiển thị
         #[arg(short, long, default_value = "10")]
         limit: usize,
+    },
+    /// Thay đổi một công việc hiện có
+    Change {
+        id: Id,
+        #[arg(long)]
+        text: Option<String>,
+        #[arg(long)]
+        done: Option<bool>,
     },
 }
 
@@ -275,15 +300,21 @@ async fn main() -> Result<(), repository::Error> {
             } => {
                 let entry = memories::add(
                     &store,
-                    r#type,
-                    context,
-                    module,
-                    subject,
-                    description,
-                    decision,
-                    rationale,
+                    memories::Add {
+                        r#type,
+                        context,
+                        module,
+                        subject,
+                        description,
+                        decision,
+                        rationale,
+                        created: repository::now()
+                    },
                 ).await?;
-                println!("Đã thêm bộ nhớ: [{}] [{:?}]: {}", entry.id, entry.r#type, entry.subject);
+                println!(
+                    "Đã thêm bộ nhớ: [{}] [{:?}]: {}",
+                    entry.id, entry.r#type, entry.subject
+                );
             }
             Memories::Get { id } => { // Cập nhật tên enum
                 match memories::get(&store, id).await? {
@@ -309,11 +340,38 @@ async fn main() -> Result<(), repository::Error> {
             }
         },
         Commands::Task { command } => match command {
-            Task::Add { text } => { // Cập nhật tên enum
-                let task = task::add(&store, "".to_string(), "".to_string(), text, "Medium".to_string(), "Pending".to_string(), "".to_string(), "".to_string(), "".to_string()).await?;
-                println!("Đã thêm công việc: [{}], {}", task.id, task.task);
+            Task::Add {
+                context,
+                module,
+                task: task_desc,
+                priority,
+                status,
+                assignee,
+                due,
+                notes,
+            } => {
+                // Chuyển đổi các chuỗi priority và status từ CLI thành enum
+                let priority_enum = task::Priority::try_from(priority)?;
+                let status_enum = task::Status::try_from(status)?;
+
+                let entry = task::add(
+                    &store,
+                    task::Add {
+                        context,
+                        module,
+                        task: task_desc,
+                        priority: priority_enum,
+                        status: status_enum,
+                        assignee,
+                        due,
+                        notes,
+                    },
+                )
+                .await?;
+                println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
             }
-            Task::Get { id } => { // Cập nhật tên enum
+            Task::Get { id } => {
+                // let task_id = Id::try_from(id)?;
                 let task = task::get(&store, id).await?;
                 let status = match task.status {
                     Status::Done => "hoàn thành",
@@ -330,9 +388,30 @@ async fn main() -> Result<(), repository::Error> {
                 let task = task::del(&store, id).await?;
                 println!("Đã xóa công việc: [{}], {}", task.id, task.task);
             }
-            Task::List { done, pending, limit } => { // Cập nhật tên enum
-                let result = task::list(&store, done, pending, limit).await?;
-                display::show(result)?;
+            Task::List { done, pending: _, limit } => {
+                // Sử dụng hàm `filter` từ shared để tạo query
+                let query = shared::filter(done, None, limit);
+
+                let results = task::list(&store, query).await?;
+                if results.is_empty() {
+                    println!("Không tìm thấy công việc nào.");
+                } else {
+                    for summary in results {
+                        summary.show();
+                    }
+                }
+            }
+            Task::Change { id, text, done } => {
+                let task = task::get(&store, id).await?;
+                let status = done.map(|d| if d { task::Status::Done } else { task::Status::Open });
+
+                let patch = task::Patch {
+                    task: text,
+                    status,
+                    ..Default::default()
+                };
+                let task = task::change(&store, task.id, patch).await?;
+                println!("Đã thay đổi công việc: [{}], {}", task.id, task.task);
             }
         },
         // Commands::Direct { command } => {

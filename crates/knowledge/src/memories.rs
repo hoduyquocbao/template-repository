@@ -1,7 +1,7 @@
 //! Module quản lý các bản ghi bộ nhớ thông qua `memories` crate.
 
-use repository::{Error, Storage, Id};
-use memories::{self, Entry, Kind}; // Import thêm Kind
+use repository::{Error, Id, Storage};
+pub use memories::{Entry, Kind, Summary};
 use shared;
 
 #[derive(Debug, Clone)]
@@ -21,24 +21,19 @@ pub struct Add {
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
-    kind: String, // Nhận String từ CLI
-    context: String,
-    module: String,
-    subject: String,
-    description: String,
-    decision: String,
-    rationale: String,
+    args: Add,
 ) -> Result<memories::Entry, repository::Error> {
     memories::add(
         store,
-        kind,
-        context,
-        module,
-        subject,
-        description,
-        decision,
-        rationale,
-    ).await
+        args.r#type,
+        args.context,
+        args.module,
+        args.subject,
+        args.description,
+        args.decision,
+        args.rationale,
+    )
+    .await
 }
 
 /// Lấy một bản ghi bộ nhớ bằng ID.

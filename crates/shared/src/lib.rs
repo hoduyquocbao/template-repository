@@ -1,19 +1,10 @@
-use serde::{Serialize, Deserialize};
+// use serde::{Serialize, Deserialize};
 use repository::{Query, Id, Key};
 
 /// Trait để định nghĩa cách một Summary được hiển thị.
 /// Mục đích: Cho phép hàm 'show' generic hóa cách in ra màn hình.
 pub trait Showable {
     fn show(&self);
-}
-
-/// Đại diện cho một bản vá (thay đổi một phần) cho một đối tượng (ví dụ: Todo).
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct Patch {
-    /// Nội dung mới, nếu cần cập nhật
-    pub text: Option<String>,
-    /// Trạng thái mới, nếu cần cập nhật
-    pub done: Option<bool>,
 }
 
 /// Trait chuẩn hóa cho các entity có thể filter/query theo prefix/after.
