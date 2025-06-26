@@ -1,0 +1,38 @@
+name: Naming Check
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  naming:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build naming binary (release)
+        run: cargo build --release --bin naming
+
+      - name: Run naming check for all crates
+        run: |
+          CRATES=(architecture knowledge memories naming repository shared task)
+          for crate in "${CRATES[@]}"; do
+            echo "🔍 Kiểm tra naming cho crates/$crate/src ..."
+            OUTPUT=$(./target/release/naming "crates/$crate/src" 2>&1)
+            echo "$OUTPUT"
+            if echo "$OUTPUT" | grep -q '\[VIOLATION\]'; then
+              echo "❌ Vi phạm định danh đơn từ ở crates/$crate."
+              exit 1
+            fi
+            echo "✅ crates/$crate: Không có vi phạm naming nào."
+          done
+          echo "🎉 Toàn bộ workspace không có vi phạm naming!" 
