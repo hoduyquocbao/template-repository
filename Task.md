@@ -1,122 +1,235 @@
 Chào bạn, tôi là Guardian, Kiến trúc sư Hệ thống.
 
-Tôi đã phân tích các thay đổi mới nhất trong kho lưu trữ và xác nhận việc hoàn thành các chỉ đạo trước đó. Hệ thống của chúng ta đang tiến hóa theo đúng định hướng, nhưng vẫn còn một khoản nợ kiến trúc quan trọng cần được giải quyết để đạt được sự thanh lịch và tối giản tuyệt đối.
+Tôi đã phân tích trạng thái hiện tại của kho lưu trữ, đối chiếu với các chỉ đạo trước và yêu cầu của bạn. Mặc dù các crate nghiệp vụ cốt lõi (`task`, `memories`, `architecture`) đã được củng cố về mặt cấu trúc index và an toàn kiểu, tôi đã phát hiện ra một số điểm không nhất quán trong kiến trúc và các khoản nợ kỹ thuật cần được giải quyết để hệ thống thực sự đạt được sự thanh lịch và dễ bảo trì.
 
-### 1\. Xác nhận Hoàn thành (`architecture` Refactor)
+### 1\. Đánh giá và Phân tích Kiến trúc Hiện tại
 
-Tôi xác nhận rằng chỉ đạo trong nhiệm vụ `task-013` đã được Coder thực hiện một cách xuất sắc.
+Sau khi rà soát, tôi xác định hai vấn đề chính cần được giải quyết:
 
-  * **Xác minh Thay đổi:**
+1.  **Mã dư thừa và không nhất quán trong `shared` và `task`**:
 
-      * **An toàn kiểu**: `crate architecture` đã được tái cấu trúc thành công để sử dụng `enum Kind` cho trường `r#type`, loại bỏ hoàn toàn rủi ro từ việc dùng `String`.
-      * **Hiệu suất Index**: Cấu trúc khóa chỉ mục (`Index`) đã được thiết kế lại thành `[type_byte][context_bytes]\0[module_bytes]\0[name_bytes]`. Điều này đã giải quyết triệt để rủi ro về hiệu suất và sự linh hoạt khi truy vấn, cho phép lọc dữ liệu đa cấp hiệu quả.
-      * **Cập nhật Logic**: Logic của CLI (`Add` command) và các bài kiểm thử đã được cập nhật để tương thích với `enum Kind` mới.
-      * **PKB**: Nhiệm vụ `task-013` đã được cập nhật trạng thái thành "Done" trong `todo.csv`, và quyết định kiến trúc tương ứng (`mem-007`) đã được ghi lại trong `memories.csv`.
+      * **Mô tả**: Hiện tại, có hai định nghĩa cho `struct Patch`. Một định nghĩa nằm trong `crates/task/src.lib.rs` được thiết kế riêng cho việc cập nhật `task::Entry`. Một định nghĩa khác, cũ hơn và không còn phù hợp, nằm trong `crates/shared/src/lib.rs`.
+      * **Phân tích Rủi ro**: Sự tồn tại của `shared::Patch` là mã chết (dead code), gây nhầm lẫn cho việc phát triển và bảo trì trong tương lai. Nó vi phạm nguyên tắc DRY (Don't Repeat Yourself) ở mức độ khái niệm và làm giảm sự rõ ràng của mục đích `crate shared`.
 
-  * **Kết luận Hiện trạng:**
-    Cả ba crate nghiệp vụ cốt lõi (`task`, `memories`, `architecture`) hiện đã có một nền tảng kiến trúc nhất quán, hiệu suất cao và an toàn về kiểu. Đây là một thành tựu quan trọng.
+2.  **Thiết kế API không nhất quán trong lớp Facade (`knowledge`)**:
 
-### 2\. Chỉ đạo Tái cấu trúc Lớn - Hợp nhất Giao diện Dòng lệnh (CLI Consolidation)
+      * **Mô tả**: Lớp `knowledge` đóng vai trò là giao diện chung cho toàn bộ hệ thống. Tuy nhiên, các hàm trong đó có signature không đồng nhất. Cụ thể:
+          * `knowledge::architecture::add` nhận một struct duy nhất là `architecture::Add`.
+          * `knowledge::task::add` và `knowledge::memories::add` lại nhận một danh sách dài các tham số riêng lẻ.
+      * **Phân tích Rủi ro**: Việc truyền một danh sách dài các tham số (`long parameter list`) là một "code smell" kinh điển. Nó làm cho mã khó đọc, khó bảo trì và dễ gây ra lỗi khi gọi hàm (ví dụ: truyền sai thứ tự tham số). Việc `architecture` đã áp dụng pattern "Introduce Parameter Object" trong khi các module khác thì không đã tạo ra sự không nhất quán, làm giảm tính thanh lịch của API.
 
-Bây giờ nền tảng đã vững chắc, đã đến lúc chúng ta phải trả một khoản nợ kiến trúc lớn hơn: **sự tồn tại của nhiều binary entry-point**.
-
-#### 2.1. Phân Tích Rủi Ro Kiến Trúc
-
-  * **Mô tả Vấn đề**: Hiện tại, dự án có nhiều binary crate: `task/bin/main.rs`, `memories/bin/main.rs`, `architecture/bin/main.rs`, và `knowledge/src/main.rs`. Crate `knowledge` đóng vai trò là một lớp facade, nhưng sự tồn tại của các binary riêng lẻ kia tạo ra sự dư thừa và làm mờ đi ranh giới trách nhiệm.
-  * **Phân tích Rủi ro:**
-    1.  **Vi phạm Nguyên lý Đơn trách nhiệm (SRP)**: Các crate nghiệp vụ (`task`, `memories`, `architecture`) đang làm hai việc: định nghĩa logic nghiệp vụ (thư viện) và xử lý tương tác người dùng (binary). Trách nhiệm của chúng nên được giới hạn ở vai trò thư viện.
-    2.  **Mã lặp lại (Code Duplication)**: Logic phân tích đối số dòng lệnh bằng `clap`, khởi tạo `Sled`, và các hàm `print` trợ giúp bị lặp lại ở nhiều nơi. Điều này làm tăng chi phí bảo trì.
-    3.  **Thiếu tính nhất quán**: Người dùng (hoặc các hệ thống khác) có nhiều cách để tương tác với hệ thống, gây ra sự nhầm lẫn và làm tăng bề mặt tấn công của các lỗi.
-    4.  **Kiến trúc không thanh lịch**: Một kiến trúc thực sự thanh lịch phải có một điểm vào (entry point) duy nhất và rõ ràng cho ứng dụng, với các thành phần khác đóng vai trò là thư viện hỗ trợ.
-
-#### 2.2. Yêu cầu Cải tiến Chi tiết cho Coder
+### 2\. Yêu cầu Cải tiến Chi tiết cho Coder
 
 **Gửi Coder:**
 
-Hãy thực hiện một đợt tái cấu trúc quan trọng để hợp nhất tất cả các chức năng giao diện dòng lệnh (CLI) vào một binary duy nhất là `knowledge`.
+Hãy thực hiện đợt tái cấu trúc sau để chuẩn hóa API và loại bỏ mã dư thừa. Những thay đổi này sẽ làm tăng tính nhất quán và dễ bảo trì cho toàn bộ hệ thống.
 
-**Mục tiêu:** Loại bỏ tất cả các binary riêng lẻ trong `task`, `memories`, và `architecture`, biến chúng thành các crate thư viện thuần túy. Toàn bộ tương tác của người dùng sẽ được xử lý độc quyền thông qua `knowledge`.
+**Mục tiêu:** Chuẩn hóa các hàm `add` trong lớp `knowledge` bằng cách sử dụng pattern "Parameter Object" và loại bỏ `struct Patch` không còn sử dụng trong `crate shared`.
 
 **Các bước thực hiện:**
 
-**Bước 1: Xóa các Thư mục và File Binary Thừa**
+**Nhiệm vụ 1: Loại bỏ `Patch` dư thừa khỏi `shared`**
 
-Hành động này sẽ xóa các điểm vào không cần thiết.
+Đây là một bước dọn dẹp đơn giản nhưng quan trọng.
 
-  * Xóa thư mục: `crates/task/src/bin/`
-  * Xóa thư mục: `crates/memories/src/bin/`
-  * Xóa thư mục: `crates/architecture/src/bin/`
+1.  **Xóa Struct**: Mở file `crates/shared/src/lib.rs` và xóa hoàn toàn định nghĩa của `struct Patch`.
+    ```rust
+    // XÓA KHỎI crates/shared/src/lib.rs
+    // /// Đại diện cho một bản vá (thay đổi một phần) cho một đối tượng (ví dụ: Todo).
+    // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+    // pub struct Patch {
+    //     /// Nội dung mới, nếu cần cập nhật
+    //     pub text: Option<String>,
+    //     /// Trạng thái mới, nếu cần cập nhật
+    //     pub done: Option<bool>,
+    // }
+    ```
+2.  **Xác minh**: Chạy lệnh `cargo check --workspace` từ thư mục gốc để đảm bảo không có phần nào của code đang sử dụng `struct` đã bị xóa này. Lệnh phải chạy thành công mà không có lỗi.
 
-**Bước 2: Cập nhật `Cargo.toml` của các Crate Nghiệp vụ**
+**Nhiệm vụ 2: Chuẩn hóa Hàm `add` cho `task` bằng Parameter Object**
 
-Chuyển đổi các crate thành dạng thư viện thuần túy.
+Chúng ta sẽ làm cho `knowledge::task::add` nhất quán với `knowledge::architecture::add`.
 
-  * Trong mỗi file `crates/task/Cargo.toml`, `crates/memories/Cargo.toml`, và `crates/architecture/Cargo.toml`, hãy đảm bảo không còn bất kỳ section `[[bin]]` nào. Các file này bây giờ sẽ chỉ định nghĩa một thư viện.
+1.  **Định nghĩa `Add` Struct**: Trong file `crates/knowledge/src/task.rs`, hãy tạo một struct mới để chứa tất cả các tham số cho việc thêm một công việc.
 
-**Bước 3: Hợp nhất và Hoàn thiện Chức năng vào `knowledge` CLI**
+    ```rust
+    // THÊM VÀO crates/knowledge/src/task.rs
 
-Đây là phần công việc chính. Cần đảm bảo `knowledge` CLI kế thừa và thực thi đúng tất cả các chức năng đã bị loại bỏ. Logic hiện có trong `knowledge/src/main.rs` đã gần đủ, nhưng cần kiểm tra và đảm bảo không có tính năng nào bị mất.
+    // Import các kiểu dữ liệu cần thiết ở đầu file
+    pub use task::{Entry, Status, Priority};
 
-  * Mở `crates/knowledge/src/main.rs`.
-  * **Xác minh `Commands::Task`**: So sánh các subcommand `Add`, `Get`, `Done`, `Del`, `List` với file `task/src/bin/main.rs` cũ để chắc chắn rằng không có tham số hoặc hành vi nào bị thiếu.
-  * **Xác minh `Commands::Memories`**: So sánh các subcommand `Add`, `Get`, `List` với file `memories/src/bin/main.rs` cũ.
-  * **Xác minh `Commands::Architecture`**: So sánh các subcommand `Add`, `Get`, `Del`, `List` với file `architecture/src/bin/main.rs` cũ.
+    #[derive(Debug, Clone)]
+    pub struct Add {
+        pub context: String,
+        pub module: String,
+        pub task: String,
+        pub priority: Priority,
+        pub status: Status,
+        pub assignee: String,
+        pub due: String,
+        pub notes: String,
+    }
+    ```
 
-**Bước 4 (Cải tiến Nâng cao): Tinh chỉnh Logic `list` trong Lớp Facade `knowledge`**
+2.  **Tái cấu trúc Hàm `add`**: Thay đổi signature của hàm `add` để nhận `struct Add` mới này.
 
-Logic `list` hiện tại trong lớp `knowledge` vẫn còn đơn giản. Hãy làm cho nó mạnh mẽ hơn để tận dụng các cấu trúc index mới.
+    ```rust
+    // THAY THẾ hàm add cũ trong crates/knowledge/src/task.rs
 
-  * **Trong `crates/knowledge/src/architecture.rs`**:
+    /// Thêm một công việc mới.
+    /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
+    pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
+        // Chuyển đổi từ String (nếu cần) và gọi hàm logic cốt lõi
+        task::add(
+            store, 
+            args.context, 
+            args.module, 
+            args.task, 
+            args.priority, 
+            args.status, 
+            args.assignee, 
+            args.due, 
+            args.notes
+        ).await
+    }
+    ```
 
-      * Thay đổi signature của hàm `list` từ `(store: &S, prefix: String, limit: usize)` thành `(store: &S, r#type: Option<String>, context: Option<String>, module: Option<String>, limit: usize)`.
-      * Bên trong hàm `list`, hãy xây dựng `prefix_vec` một cách thông minh. Ví dụ:
-        ```rust
-        // Logic mẫu trong knowledge/src/architecture.rs
-        let mut prefix_vec = Vec::new();
-        if let Some(type_str) = r#type {
-            let kind = architecture::Kind::try_from(type_str)?;
-            prefix_vec.push((&kind).into());
-            if let Some(ctx_str) = context {
-                prefix_vec.extend_from_slice(ctx_str.as_bytes());
-                prefix_vec.push(0); // Dấu phân cách
-                if let Some(mod_str) = module {
-                    prefix_vec.extend_from_slice(mod_str.as_bytes());
-                    // Tiếp tục nếu cần
-                }
-            }
-        }
-        let query = shared::query(prefix_vec, None::<Vec<u8>>, limit);
-        architecture::query(store, query).await
-        ```
+3.  **Cập nhật Lời gọi trong `main.rs`**: Mở file `crates/knowledge/src/main.rs` và cập nhật logic xử lý của `Task::Add` subcommand.
 
-  * **Trong `crates/knowledge/src/main.rs`**:
+    ```rust
+    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Commands::Task
 
-      * Cập nhật `enum Architecture` subcommand `List` để chấp nhận các tham số mới:
-        ```rust
-        // trong enum Architecture
-        List {
-            #[arg(long)]
-            r#type: Option<String>,
-            #[arg(long)]
-            context: Option<String>,
-            #[arg(long)]
-            module: Option<String>,
-            #[arg(short, long, default_value = "10")]
-            limit: usize,
-        }
-        ```
-      * Cập nhật lời gọi hàm `architecture::list` để truyền các tham số này.
+    Task::Add {
+        context,
+        module,
+        task: task_desc,
+        priority,
+        status,
+        assignee,
+        due,
+        notes,
+    } => {
+        // Chuyển đổi các chuỗi priority và status từ CLI thành enum
+        let priority_enum = task::Priority::try_from(priority)?;
+        let status_enum = task::Status::try_from(status)?;
+        
+        let entry = task::add(&store, task::Add {
+            context,
+            module,
+            task: task_desc,
+            priority: priority_enum,
+            status: status_enum,
+            assignee,
+            due,
+            notes,
+        }).await?;
+        println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
+    }
+    ```
 
-**Bước 5: Kiểm tra Toàn diện**
+4.  **Cập nhật `Task::Add` Subcommand**: Để làm được điều trên, hãy cập nhật `enum Task` trong `crates/knowledge/src/main.rs` để nhận tất cả các trường.
 
-  * Từ thư mục gốc của dự án, chạy `cargo check --workspace` để đảm bảo tất cả các thay đổi đều hợp lệ.
-  * Chạy `cargo run --package knowledge -- -h` để xác minh tất cả các subcommand (`task`, `memories`, `architecture`) và các tùy chọn của chúng đều hiển thị chính xác.
-  * Thực hiện kiểm thử thủ công một vài lệnh chính để đảm bảo chức năng không bị hồi quy. Ví dụ:
-      * `cargo run --package knowledge -- architecture list --type Agent`
-      * `cargo run --package knowledge -- task add "Finalize CLI consolidation"`
-      * `cargo run --package knowledge -- memories get --id <some-id>`
+    ```rust
+    // THAY ĐỔI trong crates/knowledge/src/main.rs
 
------
+    // --- Lệnh con cho Task (Task) ---
+    #[derive(Subcommand)]
+    enum Task {
+        /// Thêm một công việc mới
+        Add {
+            task: String,
+            #[arg(long, default_value = "")]
+            context: String,
+            #[arg(long, default_value = "")]
+            module: String,
+            #[arg(long, default_value = "Medium")]
+            priority: String,
+            #[arg(long, default_value = "Open")]
+            status: String,
+            #[arg(long, default_value = "")]
+            assignee: String,
+            #[arg(long, default_value = "")]
+            due: String,
+            #[arg(long, default_value = "")]
+            notes: String,
+        },
+        // ... các subcommand khác không đổi
+    }
+    ```
+
+**Nhiệm vụ 3: Chuẩn hóa Hàm `add` cho `memories`**
+
+Lặp lại quy trình tương tự cho `memories`.
+
+1.  **Cập nhật `Add` Struct**: Mở file `crates/knowledge/src/memories.rs`, đảm bảo struct `Add` đã có hoặc tạo nó.
+
+    ```rust
+    // TRONG crates/knowledge/src/memories.rs
+    #[derive(Debug, Clone)]
+    pub struct Add {
+        pub r#type: String,
+        pub context: String,
+        pub module: String,
+        pub subject: String,
+        pub description: String,
+        pub decision: String,
+        pub rationale: String,
+    }
+    ```
+
+2.  **Tái cấu trúc Hàm `add`**: Thay đổi signature của `knowledge::memories::add`.
+
+    ```rust
+    // THAY THẾ hàm add cũ trong crates/knowledge/src/memories.rs
+
+    /// Thêm một bản ghi bộ nhớ mới.
+    /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
+    pub async fn add<S: Storage>(
+        store: &S,
+        args: Add,
+    ) -> Result<memories::Entry, repository::Error> {
+        memories::add(
+            store,
+            args.r#type,
+            args.context,
+            args.module,
+            args.subject,
+            args.description,
+            args.decision,
+            args.rationale,
+        ).await
+    }
+    ```
+
+3.  **Cập nhật Lời gọi trong `main.rs`**: Mở `crates/knowledge/src/main.rs` và cập nhật logic `Memories::Add`.
+
+    ```rust
+    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Commands::Memories
+
+    Memories::Add {
+        r#type,
+        context,
+        module,
+        subject,
+        description,
+        decision,
+        rationale,
+    } => {
+        let entry = memories::add(
+            &store,
+            memories::Add { // Sử dụng struct Add
+                r#type,
+                context,
+                module,
+                subject,
+                description,
+                decision,
+                rationale,
+            },
+        ).await?;
+        println!("Đã thêm bộ nhớ: [{}] [{:?}]: {}", entry.id, entry.r#type, entry.subject);
+    }
+    ```
 
 ### 3\. Cập nhật PKB
 
@@ -125,13 +238,13 @@ Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiế
 **`memories.csv` (Mục mới được đề xuất)**
 
 ```csv
-"mem-008","Decision","System","All","Consolidate all CLI entry points into the 'knowledge' crate","The project had multiple binary crates (task, memories, architecture, knowledge), leading to code duplication, unclear separation of concerns, and architectural inconsistency.","Removed the binary targets from 'task', 'memories', and 'architecture', making them pure library crates. All CLI functionality is now centralized and handled exclusively by the 'knowledge' binary crate.","This refactoring enforces the Single Responsibility Principle, reduces code duplication, provides a single consistent user interface, and results in a more elegant and maintainable architecture with a clear separation between library logic and application execution."
+"mem-009","Decision","System","knowledge","Standardize Facade API using Parameter Object pattern","The 'add' functions within the 'knowledge' facade crate had inconsistent signatures; some took a long list of parameters while others took a single struct. A redundant 'Patch' struct also existed in the 'shared' crate.","1. Refactor all 'add' functions in 'knowledge::{task, memories, architecture}' to accept a single 'Add' struct argument (Parameter Object). 2. Remove the obsolete 'Patch' struct from the 'shared' crate.","This refactoring significantly improves API consistency, readability, and maintainability across the facade layer. It eliminates a classic 'long parameter list' code smell and removes dead code, resulting in a cleaner and more elegant architecture.",<Timestamp>
 ```
 
 **`todo.csv` (Nhiệm vụ mới)**
 
 ```csv
-"task-014","Refactor","System","Centralize all CLI functionality into the 'knowledge' crate","High","Open","Coder","","1. Delete bin targets from 'task', 'memories', 'architecture'. 2. Update their Cargo.toml files to be lib-only. 3. Enhance 'knowledge' CLI to fully cover all removed functionalities. 4. Refactor 'knowledge::architecture::list' to support multi-level filtering. 5. Update the 'Architecture::List' subcommand in 'knowledge/main.rs' with new filter options. 6. Verify all changes with 'cargo check' and manual testing of the unified CLI."
+"task-015","Refactor","knowledge","Standardize Facade API and remove redundant code","High","Open","Coder","","1. Delete the obsolete 'Patch' struct from 'crates/shared/src/lib.rs'. 2. Implement the Parameter Object pattern for 'knowledge::task::add' by creating a 'task::Add' struct and refactoring the function and its call site in 'main.rs'. 3. Implement the same pattern for 'knowledge::memories::add'. 4. Ensure all changes pass 'cargo check --workspace' and manual CLI testing."
 ```
 
-Đây là một bước tái cấu trúc nền tảng. Việc hoàn thành nó sẽ đưa hệ thống của chúng ta đến một trạng thái trong sáng và vững chắc hơn rất nhiều. Hãy tiến hành.
+Những thay đổi này tuy nhỏ nhưng lại cực kỳ quan trọng trong việc duy trì một kiến trúc trong sạch và nhất quán. Hãy tiến hành.
