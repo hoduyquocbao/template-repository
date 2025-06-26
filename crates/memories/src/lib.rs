@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use repository::{Entity, Id, Storage, Error, Key, now, Query};
 use shared::{Showable, Filterable};
+use tracing::{info, warn};
 
 use std::convert::TryFrom;
 
@@ -38,7 +39,7 @@ impl TryFrom<String> for Kind {
             "lesson" => Ok(Kind::Lesson),
             "refactor" => Ok(Kind::Refactor),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Input),
+            _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))),
         }
     }
 }
@@ -125,7 +126,7 @@ impl Showable for Summary {
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
-    kind: String, // Nhận String từ CLI
+    kind_str: String,
     context: String,
     module: String,
     subject: String,
@@ -133,8 +134,15 @@ pub async fn add<S: Storage>(
     decision: String,
     rationale: String,
 ) -> Result<Entry, Error> {
-    let kind = Kind::try_from(kind)?; // Chuyển đổi và xác thực
-
+    info!(kind = %kind_str, context = %context, "Đang thêm bộ nhớ mới");
+    let kind = Kind::try_from(kind_str)?; // Chuyển đổi và xác thực loại
+    
+    // Kiểm tra các trường bắt buộc
+    if context.is_empty() || module.is_empty() || subject.is_empty() {
+        warn!("Thiếu thông tin bắt buộc khi thêm bộ nhớ");
+        return Err(Error::Validation("Context, Module, và Subject không được để trống.".to_string()));
+    }
+    
     let entry = Entry {
         id: Id::new_v4(),
         r#type: kind, // Sử dụng enum đã được xác thực

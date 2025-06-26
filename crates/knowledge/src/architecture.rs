@@ -18,6 +18,31 @@ pub struct Add {
     pub created: u128,
 }
 
+impl Add {
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.name.trim().is_empty() {
+            return Err(Error::Validation("Tên không được để trống.".to_string()));
+        }
+        if self.name.len() > 64 {
+            return Err(Error::Validation(
+                "Tên không được vượt quá 64 ký tự.".to_string(),
+            ));
+        }
+        if self.context.len() > 64 {
+            return Err(Error::Validation(
+                "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
+            ));
+        }
+        if self.module.len() > 64 {
+            return Err(Error::Validation(
+                "Module không được vượt quá 64 ký tự.".to_string(),
+            ));
+        }
+        // Thêm các quy tắc khác nếu cần
+        Ok(())
+    }
+}
+
 /// Thêm hoặc cập nhật một bản ghi kiến trúc.
 /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
 pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {

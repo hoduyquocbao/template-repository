@@ -8,6 +8,7 @@ use std::convert::TryFrom;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Kind {
+    System,
     Context,
     Module,
     Agent,
@@ -15,19 +16,24 @@ pub enum Kind {
     Entity,
     Aggregate,
     Value,
+    Event,
+    Command,
     Other,
 }
 
 impl From<&Kind> for u8 {
     fn from(kind: &Kind) -> u8 {
         match kind {
-            Kind::Context => 0,
-            Kind::Module => 1,
-            Kind::Agent => 2,
-            Kind::Trait => 3,
-            Kind::Entity => 4,
-            Kind::Aggregate => 5,
-            Kind::Value => 6,
+            Kind::System => 0,
+            Kind::Context => 1,
+            Kind::Module => 2,
+            Kind::Agent => 3,
+            Kind::Trait => 4,
+            Kind::Entity => 5,
+            Kind::Aggregate => 6,
+            Kind::Value => 7,
+            Kind::Event => 8,
+            Kind::Command => 9,
             Kind::Other => 255,
         }
     }
@@ -37,6 +43,7 @@ impl TryFrom<String> for Kind {
     type Error = Error;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         match s.to_lowercase().as_str() {
+            "system" => Ok(Kind::System),
             "context" => Ok(Kind::Context),
             "module" => Ok(Kind::Module),
             "agent" => Ok(Kind::Agent),
@@ -44,8 +51,10 @@ impl TryFrom<String> for Kind {
             "entity" => Ok(Kind::Entity),
             "aggregate" => Ok(Kind::Aggregate),
             "value" => Ok(Kind::Value),
+            "event" => Ok(Kind::Event),
+            "command" => Ok(Kind::Command),
             "other" => Ok(Kind::Other),
-            _ => Err(Error::Input),
+            _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))),
         }
     }
 }

@@ -39,7 +39,7 @@ impl<T: Clone + Send + Sync + 'static> Pool<T> {
     /// Mục đích: Đảm bảo không vượt quá số lượng kết nối tối đa
     /// Thuật toán: acquire semaphore, trả về bản sao kết nối đầu tiên (demo, có thể mở rộng round-robin)
     pub async fn get(&self) -> Result<T, Error> {
-        let _permit = self.sem.acquire().await.map_err(|_| Error::Input)?; // Chặn nếu hết permit
+        let _permit = self.sem.acquire().await.map_err(|_| Error::Validation("Không thể lấy permit từ semaphore.".to_string()))?; // Chặn nếu hết permit
         Ok(self.conn[0].clone()) // Trả về bản sao kết nối (có thể cải tiến chọn kết nối khác)
     }
     

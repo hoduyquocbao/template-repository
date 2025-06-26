@@ -22,8 +22,8 @@ pub enum Error {
 
     /// Được trả về khi đầu vào không hợp lệ được cung cấp.
     /// Mục đích: Bắt các trường hợp dữ liệu đầu vào sai, thiếu, hoặc không hợp lệ.
-    #[error("đầu vào không hợp lệ")]
-    Input,
+    #[error("đầu vào không hợp lệ: {0}")]
+    Validation(String),
 
     /// Lỗi từ lớp lưu trữ cơ bản (sled).
     /// Mục đích: Bọc lỗi từ backend lưu trữ, giúp trace nguồn gốc lỗi.

@@ -25,7 +25,7 @@ pub trait Extension {
 // Triển khai Extension cho enum Error của hệ thống
 impl Extension for Error {
     fn parse(_err: ParseError) -> Self {
-        Error::Input // Ánh xạ lỗi phân tích thành lỗi đầu vào (Input)
+        Error::Validation("Lỗi phân tích cú pháp JSON.".to_string()) // Ánh xạ lỗi phân tích thành lỗi đầu vào
     }
 
     // Triển khai cho 'io' đã được loại bỏ
@@ -33,3 +33,11 @@ impl Extension for Error {
     //     Error::Store(sled::Error::Io(err)) // Bọc lỗi IO trong lỗi lưu trữ (Store), giúp trace lỗi IO từ sled
     // }
 }
+
+// impl From<serde_json::Error> for Error {
+//     fn from(_err: serde_json::Error) -> Self {
+//         // Hiện tại, chúng ta không cần chi tiết về lỗi serde,
+//         // chỉ cần biết rằng nó đã thất bại.
+//         Error::Validation("Lỗi phân tích cú pháp JSON.".to_string()) // Ánh xạ lỗi phân tích thành lỗi đầu vào
+//     }
+// }

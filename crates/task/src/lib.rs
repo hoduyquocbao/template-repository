@@ -41,7 +41,7 @@ impl TryFrom<String> for Status {
             "Open" => Ok(Status::Open),
             "Pending" => Ok(Status::Pending),
             "Done" => Ok(Status::Done),
-            _ => Err(Error::Input),
+            _ => Err(Error::Validation(format!("Trạng thái '{}' không hợp lệ.", s))),
         }
     }
 }
@@ -63,7 +63,7 @@ impl TryFrom<String> for Priority {
             "High" => Ok(Priority::High),
             "Medium" => Ok(Priority::Medium),
             "Low" => Ok(Priority::Low),
-            _ => Err(Error::Input),
+            _ => Err(Error::Validation(format!("Ưu tiên '{}' không hợp lệ.", s))),
         }
     }
 }
@@ -157,7 +157,7 @@ pub async fn add<S: Storage>(
     info!(task = %task_desc, "Đang thêm công việc mới");
     if task_desc.is_empty() {
         warn!("Cố gắng thêm công việc với nội dung rỗng");
-        return Err(Error::Input);
+        return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
     }
     
     let task = Entry {
@@ -195,7 +195,7 @@ pub async fn change<S: Storage>(store: &S, id: Id, patch: Patch) -> Result<Entry
     if let Some(text) = &patch.task {
         if text.is_empty() {
             warn!(%id, "Cố gắng cập nhật công việc với nội dung rỗng");
-            return Err(Error::Input);
+            return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
         }
     }
     

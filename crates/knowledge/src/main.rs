@@ -222,27 +222,25 @@ async fn main() -> Result<(), repository::Error> {
                 naming,
                 prompt,
             } => {
-                info!(
-                    %context, %module, %r#type, %name, "Đang xử lý lệnh thêm/cập nhật bản ghi kiến trúc"
-                );
-                let entry = architecture::add(
-                    &store,
-                    architecture::Add {
-                        context,
-                        module,
-                        r#type,
-                        name,
-                        responsibility,
-                        dependency,
-                        performance,
-                        naming,
-                        prompt,
-                        created: repository::now(),
-                    },
-                ).await?;
-                println!("Đã thêm/cập nhật: [{}:{}:{}] {:?}", entry.context, entry.module, entry.r#type, entry.name);
+                let args = architecture::Add {
+                    context,
+                    module,
+                    r#type,
+                    name,
+                    responsibility,
+                    dependency,
+                    performance,
+                    naming,
+                    prompt,
+                    created: repository::now(),
+                };
+
+                args.validate()?;
+
+                let entry = architecture::add(&store, args).await?;
+                println!("Đã thêm kiến trúc: {}", entry.name);
             }
-            Architecture::Get { // Cập nhật tên enum
+            Architecture::Get {
                 context,
                 module,
                 r#type,
@@ -267,7 +265,7 @@ async fn main() -> Result<(), repository::Error> {
                     }
                 }
             }
-            Architecture::Del { // Cập nhật tên enum
+            Architecture::Del {
                 context,
                 module,
                 r#type,
@@ -298,19 +296,20 @@ async fn main() -> Result<(), repository::Error> {
                 decision,
                 rationale,
             } => {
-                let entry = memories::add(
-                    &store,
-                    memories::Add {
-                        r#type,
-                        context,
-                        module,
-                        subject,
-                        description,
-                        decision,
-                        rationale,
-                        created: repository::now()
-                    },
-                ).await?;
+                let args = memories::Add {
+                    r#type,
+                    context,
+                    module,
+                    subject,
+                    description,
+                    decision,
+                    rationale,
+                    created: repository::now(),
+                };
+
+                args.validate()?;
+
+                let entry = memories::add(&store, args).await?;
                 println!(
                     "Đã thêm bộ nhớ: [{}] [{:?}]: {}",
                     entry.id, entry.r#type, entry.subject
@@ -350,24 +349,23 @@ async fn main() -> Result<(), repository::Error> {
                 due,
                 notes,
             } => {
-                // Chuyển đổi các chuỗi priority và status từ CLI thành enum
                 let priority_enum = task::Priority::try_from(priority)?;
                 let status_enum = task::Status::try_from(status)?;
 
-                let entry = task::add(
-                    &store,
-                    task::Add {
-                        context,
-                        module,
-                        task: task_desc,
-                        priority: priority_enum,
-                        status: status_enum,
-                        assignee,
-                        due,
-                        notes,
-                    },
-                )
-                .await?;
+                let args = task::Add {
+                    context,
+                    module,
+                    task: task_desc,
+                    priority: priority_enum,
+                    status: status_enum,
+                    assignee,
+                    due,
+                    notes,
+                };
+
+                args.validate()?;
+
+                let entry = task::add(&store, args).await?;
                 println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
             }
             Task::Get { id } => {

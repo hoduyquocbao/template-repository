@@ -1,119 +1,114 @@
 Chào bạn, tôi là Guardian, Kiến trúc sư Hệ thống.
 
-Tôi đã phân tích trạng thái hiện tại của kho lưu trữ, đối chiếu với các chỉ đạo trước và yêu cầu của bạn. Mặc dù các crate nghiệp vụ cốt lõi (`task`, `memories`, `architecture`) đã được củng cố về mặt cấu trúc index và an toàn kiểu, tôi đã phát hiện ra một số điểm không nhất quán trong kiến trúc và các khoản nợ kỹ thuật cần được giải quyết để hệ thống thực sự đạt được sự thanh lịch và dễ bảo trì.
+Tôi đã phân tích trạng thái mới nhất của kho lưu trữ `template-repository`. Trước hết, tôi không thể thực thi các lệnh như `git diff` hay `git log` để xem lịch sử commit. Tuy nhiên, bằng cách phân tích toàn bộ các file bạn cung cấp và đối chiếu với các chỉ đạo trước, tôi có thể đánh giá trạng thái hiện tại và xác định các bước cải tiến tiếp theo.
 
-### 1\. Đánh giá và Phân tích Kiến trúc Hiện tại
+### 1\. Xác nhận Hoàn thành và Đánh giá Hiện trạng
 
-Sau khi rà soát, tôi xác định hai vấn đề chính cần được giải quyết:
+Tôi xác nhận rằng chỉ đạo trong nhiệm vụ `task-015` đã được Coder thực hiện thành công.
 
-1.  **Mã dư thừa và không nhất quán trong `shared` và `task`**:
+  * **Xác minh Thay đổi:**
 
-      * **Mô tả**: Hiện tại, có hai định nghĩa cho `struct Patch`. Một định nghĩa nằm trong `crates/task/src.lib.rs` được thiết kế riêng cho việc cập nhật `task::Entry`. Một định nghĩa khác, cũ hơn và không còn phù hợp, nằm trong `crates/shared/src/lib.rs`.
-      * **Phân tích Rủi ro**: Sự tồn tại của `shared::Patch` là mã chết (dead code), gây nhầm lẫn cho việc phát triển và bảo trì trong tương lai. Nó vi phạm nguyên tắc DRY (Don't Repeat Yourself) ở mức độ khái niệm và làm giảm sự rõ ràng của mục đích `crate shared`.
+      * **Dọn dẹp `shared`**: `struct Patch` đã lỗi thời đã được loại bỏ khỏi `crates/shared/src/lib.rs`.
+      * **Chuẩn hóa API Facade**: Các hàm `add` trong `knowledge::task` và `knowledge::memories` giờ đây đã nhất quán với `knowledge::architecture`, tất cả đều sử dụng pattern "Parameter Object" (nhận một struct `Add` duy nhất) thay vì một danh sách dài các tham số.
+      * **PKB**: Nhiệm vụ `task-015` trong `todo.csv` đã được cập nhật trạng thái "Done", và quyết định kiến trúc (`mem-009`) đã được ghi lại chính xác.
 
-2.  **Thiết kế API không nhất quán trong lớp Facade (`knowledge`)**:
+  * **Kết luận Hiện trạng:**
+    Kiến trúc hệ thống đã đạt đến một mức độ nhất quán và trong sạch rất cao. Các crate nghiệp vụ (`task`, `memories`, `architecture`) có cấu trúc index hiệu quả và an toàn kiểu. Lớp facade (`knowledge`) có API gọn gàng và dễ bảo trì. Giờ là lúc chúng ta củng cố "vành đai phòng thủ" của hệ thống.
 
-      * **Mô tả**: Lớp `knowledge` đóng vai trò là giao diện chung cho toàn bộ hệ thống. Tuy nhiên, các hàm trong đó có signature không đồng nhất. Cụ thể:
-          * `knowledge::architecture::add` nhận một struct duy nhất là `architecture::Add`.
-          * `knowledge::task::add` và `knowledge::memories::add` lại nhận một danh sách dài các tham số riêng lẻ.
-      * **Phân tích Rủi ro**: Việc truyền một danh sách dài các tham số (`long parameter list`) là một "code smell" kinh điển. Nó làm cho mã khó đọc, khó bảo trì và dễ gây ra lỗi khi gọi hàm (ví dụ: truyền sai thứ tự tham số). Việc `architecture` đã áp dụng pattern "Introduce Parameter Object" trong khi các module khác thì không đã tạo ra sự không nhất quán, làm giảm tính thanh lịch của API.
+### 2\. Phân tích và Chỉ đạo Cải tiến - Tăng cường An toàn và Bảo mật Đầu vào
 
-### 2\. Yêu cầu Cải tiến Chi tiết cho Coder
+Mặc dù cấu trúc bên trong đã tốt, hệ thống của chúng ta hiện tại vẫn còn một điểm yếu nghiêm trọng: **thiếu một lớp xác thực đầu vào (Input Validation) có hệ thống**.
+
+  * **Mô tả Vấn đề**: Việc xác thực dữ liệu từ người dùng đang diễn ra một cách rải rác và không đầy đủ. Ví dụ, chúng ta có thể đang chấp nhận các chuỗi đầu vào với độ dài không giới hạn.
+
+  * **Phân tích Rủi ro:**
+
+    1.  **Rủi ro về Tính toàn vẹn Dữ liệu (Data Integrity)**: Việc lưu trữ các chuỗi quá dài có thể làm hỏng định dạng hiển thị, gây lãng phí dung lượng lưu trữ và tiềm ẩn lỗi khi các hệ thống khác đọc dữ liệu này.
+    2.  **Rủi ro Hiệu suất (Performance Risk)**: Xử lý và lưu trữ các chuỗi cực lớn (ví dụ: vài megabyte) có thể làm chậm cơ sở dữ liệu và tăng độ trễ của hệ thống.
+    3.  **Rủi ro Bảo mật (Security Risk)**: Mặc dù hiện tại chúng ta không render HTML, việc cho phép lưu trữ các chuỗi tùy ý có thể mở ra các vector tấn công trong tương lai nếu dữ liệu này được sử dụng trong một ngữ cảnh khác (ví dụ: Cross-Site Scripting - XSS). Việc giới hạn độ dài và định dạng là một nguyên tắc phòng thủ theo chiều sâu (defense-in-depth).
+
+  * **Giải pháp Kiến trúc: Giới thiệu Lớp Xác thực tại Ranh giới Ứng dụng**
+    Chúng ta sẽ triển khai một lớp xác thực ngay tại điểm vào của hệ thống (`knowledge` CLI), trước khi dữ liệu được chuyển đến lớp logic nghiệp vụ. Chúng ta sẽ mở rộng các `struct Add` đã tạo trong chỉ đạo trước để thêm vào đó phương thức `validate()`.
+
+### 3\. Yêu cầu Cải tiến Chi tiết cho Coder
 
 **Gửi Coder:**
 
-Hãy thực hiện đợt tái cấu trúc sau để chuẩn hóa API và loại bỏ mã dư thừa. Những thay đổi này sẽ làm tăng tính nhất quán và dễ bảo trì cho toàn bộ hệ thống.
+Hãy triển khai một lớp xác thực đầu vào có hệ thống để tăng cường an toàn, bảo mật và tính toàn vẹn dữ liệu cho toàn bộ hệ thống.
 
-**Mục tiêu:** Chuẩn hóa các hàm `add` trong lớp `knowledge` bằng cách sử dụng pattern "Parameter Object" và loại bỏ `struct Patch` không còn sử dụng trong `crate shared`.
+**Mục tiêu:** Implement các quy tắc xác thực (validation rules) cho tất cả các hoạt động tạo dữ liệu mới (`add`) trong `task`, `memories`, và `architecture` bằng cách thêm phương thức `validate()` vào các `struct Add` tương ứng.
 
-**Các bước thực hiện:**
+**Nhiệm vụ 1: Nâng cấp `Error` Enum để cung cấp Phản hồi Tốt hơn**
 
-**Nhiệm vụ 1: Loại bỏ `Patch` dư thừa khỏi `shared`**
+`Error::Input` hiện tại quá chung chung. Chúng ta cần một loại lỗi cụ thể hơn cho việc xác thực.
 
-Đây là một bước dọn dẹp đơn giản nhưng quan trọng.
-
-1.  **Xóa Struct**: Mở file `crates/shared/src/lib.rs` và xóa hoàn toàn định nghĩa của `struct Patch`.
+1.  **Sửa `crates/repository/src/error.rs`**: Thay thế `Input` bằng một biến thể `Validation` có thể chứa thông điệp lỗi chi tiết.
     ```rust
-    // XÓA KHỎI crates/shared/src/lib.rs
-    // /// Đại diện cho một bản vá (thay đổi một phần) cho một đối tượng (ví dụ: Todo).
-    // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-    // pub struct Patch {
-    //     /// Nội dung mới, nếu cần cập nhật
-    //     pub text: Option<String>,
-    //     /// Trạng thái mới, nếu cần cập nhật
-    //     pub done: Option<bool>,
-    // }
+    // THAY THẾ trong crates/repository/src/error.rs
+    #[derive(Error, Debug)]
+    pub enum Error {
+        // ... các biến thể khác ...
+
+        /// Được trả về khi đầu vào không hợp lệ được cung cấp.
+        #[error("đầu vào không hợp lệ: {0}")]
+        Validation(String), // THAY ĐỔI: Thêm String để chứa thông điệp
+
+        /// Lỗi từ lớp lưu trữ cơ bản (sled).
+        #[error("lỗi lưu trữ: {0}")]
+        Store(#[from] sled::Error),
+
+        // ... các biến thể khác ...
+    }
     ```
-2.  **Xác minh**: Chạy lệnh `cargo check --workspace` từ thư mục gốc để đảm bảo không có phần nào của code đang sử dụng `struct` đã bị xóa này. Lệnh phải chạy thành công mà không có lỗi.
-
-**Nhiệm vụ 2: Chuẩn hóa Hàm `add` cho `task` bằng Parameter Object**
-
-Chúng ta sẽ làm cho `knowledge::task::add` nhất quán với `knowledge::architecture::add`.
-
-1.  **Định nghĩa `Add` Struct**: Trong file `crates/knowledge/src/task.rs`, hãy tạo một struct mới để chứa tất cả các tham số cho việc thêm một công việc.
-
+2.  **Cập nhật các file sử dụng `Error::Input`**: Tìm kiếm `Error::Input` trong toàn bộ codebase và thay thế nó bằng `Error::Validation("Thông điệp lỗi phù hợp".to_string())`. Ví dụ, trong `memories/src/lib.rs` và `architecture/src/lib.rs`:
     ```rust
-    // THÊM VÀO crates/knowledge/src/task.rs
-
-    // Import các kiểu dữ liệu cần thiết ở đầu file
-    pub use task::{Entry, Status, Priority};
-
-    #[derive(Debug, Clone)]
-    pub struct Add {
-        pub context: String,
-        pub module: String,
-        pub task: String,
-        pub priority: Priority,
-        pub status: Status,
-        pub assignee: String,
-        pub due: String,
-        pub notes: String,
+    // Ví dụ thay thế trong impl TryFrom<String> for Kind
+    impl TryFrom<String> for Kind {
+        type Error = Error;
+        fn try_from(s: String) -> Result<Self, Self::Error> {
+            match s.to_lowercase().as_str() {
+                // ...
+                _ => Err(Error::Validation(format!("Loại '{}' không hợp lệ.", s))), // Cung cấp thông điệp rõ ràng
+            }
+        }
     }
     ```
 
-2.  **Tái cấu trúc Hàm `add`**: Thay đổi signature của hàm `add` để nhận `struct Add` mới này.
+**Nhiệm vụ 2: Triển khai Validation cho `task`**
 
+1.  **Thêm phương thức `validate` vào `crates/knowledge/src/task.rs`**:
     ```rust
-    // THAY THẾ hàm add cũ trong crates/knowledge/src/task.rs
+    // THÊM vào trong crates/knowledge/src/task.rs
+    use repository::Error; // Đảm bảo import Error
 
-    /// Thêm một công việc mới.
-    /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
-    pub async fn add<S: Storage>(store: &S, args: Add) -> Result<Entry, Error> {
-        // Chuyển đổi từ String (nếu cần) và gọi hàm logic cốt lõi
-        task::add(
-            store, 
-            args.context, 
-            args.module, 
-            args.task, 
-            args.priority, 
-            args.status, 
-            args.assignee, 
-            args.due, 
-            args.notes
-        ).await
+    impl Add {
+        pub fn validate(&self) -> Result<(), Error> {
+            if self.task.trim().is_empty() {
+                return Err(Error::Validation("Mô tả công việc không được để trống.".to_string()));
+            }
+            if self.task.len() > 256 {
+                return Err(Error::Validation("Mô tả công việc không được vượt quá 256 ký tự.".to_string()));
+            }
+            if self.context.len() > 64 {
+                return Err(Error::Validation("Ngữ cảnh không được vượt quá 64 ký tự.".to_string()));
+            }
+            if self.module.len() > 64 {
+                return Err(Error::Validation("Module không được vượt quá 64 ký tự.".to_string()));
+            }
+            // Thêm các quy tắc khác nếu cần
+            Ok(())
+        }
     }
     ```
-
-3.  **Cập nhật Lời gọi trong `main.rs`**: Mở file `crates/knowledge/src/main.rs` và cập nhật logic xử lý của `Task::Add` subcommand.
-
+2.  **Gọi `validate` trong `crates/knowledge/src/main.rs`**:
     ```rust
-    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Commands::Task
-
-    Task::Add {
-        context,
-        module,
-        task: task_desc,
-        priority,
-        status,
-        assignee,
-        due,
-        notes,
-    } => {
-        // Chuyển đổi các chuỗi priority và status từ CLI thành enum
+    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match `Task::Add`
+    Task::Add { ... } => {
         let priority_enum = task::Priority::try_from(priority)?;
         let status_enum = task::Status::try_from(status)?;
         
-        let entry = task::add(&store, task::Add {
+        // Tạo struct args
+        let args = task::Add {
             context,
             module,
             task: task_desc,
@@ -122,129 +117,47 @@ Chúng ta sẽ làm cho `knowledge::task::add` nhất quán với `knowledge::ar
             assignee,
             due,
             notes,
-        }).await?;
+        };
+
+        // GỌI VALIDATE Ở ĐÂY
+        args.validate()?;
+        
+        // Chỉ gọi add sau khi đã validate thành công
+        let entry = task::add(&store, args).await?;
         println!("Đã thêm công việc: [{}], {}", entry.id, entry.task);
     }
     ```
 
-4.  **Cập nhật `Task::Add` Subcommand**: Để làm được điều trên, hãy cập nhật `enum Task` trong `crates/knowledge/src/main.rs` để nhận tất cả các trường.
+**Nhiệm vụ 3: Triển khai Validation cho `memories` và `architecture`**
 
-    ```rust
-    // THAY ĐỔI trong crates/knowledge/src/main.rs
+Lặp lại quy trình tương tự cho `memories` và `architecture`.
 
-    // --- Lệnh con cho Task (Task) ---
-    #[derive(Subcommand)]
-    enum Task {
-        /// Thêm một công việc mới
-        Add {
-            task: String,
-            #[arg(long, default_value = "")]
-            context: String,
-            #[arg(long, default_value = "")]
-            module: String,
-            #[arg(long, default_value = "Medium")]
-            priority: String,
-            #[arg(long, default_value = "Open")]
-            status: String,
-            #[arg(long, default_value = "")]
-            assignee: String,
-            #[arg(long, default_value = "")]
-            due: String,
-            #[arg(long, default_value = "")]
-            notes: String,
-        },
-        // ... các subcommand khác không đổi
-    }
-    ```
+1.  **Đối với `memories` (trong `crates/knowledge/src/memories.rs`)**:
 
-**Nhiệm vụ 3: Chuẩn hóa Hàm `add` cho `memories`**
+      * Thêm phương thức `validate()` vào `impl memories::Add`.
+      * Kiểm tra độ dài cho `subject` (\<= 256), `context` (\<= 64), `module` (\<= 64), và các trường `description`, `decision`, `rationale` (ví dụ: \<= 4096).
+      * Gọi `args.validate()?` trong `main.rs` trước khi gọi `memories::add`.
 
-Lặp lại quy trình tương tự cho `memories`.
+2.  **Đối với `architecture` (trong `crates/knowledge/src/architecture.rs`)**:
 
-1.  **Cập nhật `Add` Struct**: Mở file `crates/knowledge/src/memories.rs`, đảm bảo struct `Add` đã có hoặc tạo nó.
+      * Thêm phương thức `validate()` vào `impl architecture::Add`.
+      * Kiểm tra độ dài cho `name` (\<= 64), `context` (\<= 64), `module` (\<= 64), và các trường mô tả khác.
+      * Gọi `args.validate()?` trong `main.rs` trước khi gọi `architecture::add`.
 
-    ```rust
-    // TRONG crates/knowledge/src/memories.rs
-    #[derive(Debug, Clone)]
-    pub struct Add {
-        pub r#type: String,
-        pub context: String,
-        pub module: String,
-        pub subject: String,
-        pub description: String,
-        pub decision: String,
-        pub rationale: String,
-    }
-    ```
-
-2.  **Tái cấu trúc Hàm `add`**: Thay đổi signature của `knowledge::memories::add`.
-
-    ```rust
-    // THAY THẾ hàm add cũ trong crates/knowledge/src/memories.rs
-
-    /// Thêm một bản ghi bộ nhớ mới.
-    /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
-    pub async fn add<S: Storage>(
-        store: &S,
-        args: Add,
-    ) -> Result<memories::Entry, repository::Error> {
-        memories::add(
-            store,
-            args.r#type,
-            args.context,
-            args.module,
-            args.subject,
-            args.description,
-            args.decision,
-            args.rationale,
-        ).await
-    }
-    ```
-
-3.  **Cập nhật Lời gọi trong `main.rs`**: Mở `crates/knowledge/src/main.rs` và cập nhật logic `Memories::Add`.
-
-    ```rust
-    // THAY ĐỔI trong crates/knowledge/src/main.rs, bên trong match Commands::Memories
-
-    Memories::Add {
-        r#type,
-        context,
-        module,
-        subject,
-        description,
-        decision,
-        rationale,
-    } => {
-        let entry = memories::add(
-            &store,
-            memories::Add { // Sử dụng struct Add
-                r#type,
-                context,
-                module,
-                subject,
-                description,
-                decision,
-                rationale,
-            },
-        ).await?;
-        println!("Đã thêm bộ nhớ: [{}] [{:?}]: {}", entry.id, entry.r#type, entry.subject);
-    }
-    ```
-
-### 3\. Cập nhật PKB
+### 4\. Cập nhật PKB
 
 Tôi sẽ tạo các mục mới trong PKB để ghi lại quyết định kiến trúc này và giao nhiệm vụ cho bạn.
 
 **`memories.csv` (Mục mới được đề xuất)**
 
 ```csv
-"mem-009","Decision","System","knowledge","Standardize Facade API using Parameter Object pattern","The 'add' functions within the 'knowledge' facade crate had inconsistent signatures; some took a long list of parameters while others took a single struct. A redundant 'Patch' struct also existed in the 'shared' crate.","1. Refactor all 'add' functions in 'knowledge::{task, memories, architecture}' to accept a single 'Add' struct argument (Parameter Object). 2. Remove the obsolete 'Patch' struct from the 'shared' crate.","This refactoring significantly improves API consistency, readability, and maintainability across the facade layer. It eliminates a classic 'long parameter list' code smell and removes dead code, resulting in a cleaner and more elegant architecture.",<Timestamp>
+"mem-010","Decision","System","All","Implement a systematic input validation layer","The system lacked a consistent input validation mechanism, posing risks to data integrity, performance, and security (e.g., storing overly long strings).","Introduced a `validate()` method on all `Add` parameter objects within the `knowledge` facade. This method is called from the CLI handler in `main.rs` before passing data to the business logic layer. The generic `Error::Input` was replaced with a more descriptive `Error::Validation(String)`.","This change establishes a clear validation boundary, enhancing system robustness by ensuring all user input conforms to predefined rules (e.g., length limits). It improves security by preventing storage of potentially harmful or malformed data and provides more specific error feedback to the user."
 ```
 
 **`todo.csv` (Nhiệm vụ mới)**
 
 ```csv
-"task-015","Refactor","knowledge","Standardize Facade API and remove redundant code","High","Open","Coder","","1. Delete the obsolete 'Patch' struct from 'crates/shared/src/lib.rs'. 2. Implement the Parameter Object pattern for 'knowledge::task::add' by creating a 'task::Add' struct and refactoring the function and its call site in 'main.rs'. 3. Implement the same pattern for 'knowledge::memories::add'. 4. Ensure all changes pass 'cargo check --workspace' and manual CLI testing."
+"task-016","Refactor","System","Implement systematic input validation layer","High","Open","Coder","","1. Refactor `repository::Error::Input` to `Error::Validation(String)`. 2. Update all call sites to use the new validation error. 3. Implement a `validate()` method on `knowledge::task::Add` with length checks. 4. Implement `validate()` for `knowledge::memories::Add` & `knowledge::architecture::Add`. 5. Integrate `validate()` calls into `knowledge/main.rs` for all `Add` subcommands before calling the business logic."
 ```
 
-Những thay đổi này tuy nhỏ nhưng lại cực kỳ quan trọng trong việc duy trì một kiến trúc trong sạch và nhất quán. Hãy tiến hành.
+Việc triển khai lớp phòng thủ này là cực kỳ quan trọng để đảm bảo hệ thống của chúng ta không chỉ thanh lịch về mặt kiến trúc mà còn mạnh mẽ và an toàn trong hoạt động thực tế. Hãy tiến hành.

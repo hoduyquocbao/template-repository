@@ -16,6 +16,38 @@ pub struct Add {
     pub created: u128,
 }
 
+impl Add {
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.subject.trim().is_empty() {
+            return Err(Error::Validation("Chủ đề không được để trống.".to_string()));
+        }
+        if self.subject.len() > 256 {
+            return Err(Error::Validation(
+                "Chủ đề không được vượt quá 256 ký tự.".to_string(),
+            ));
+        }
+        if self.context.len() > 64 {
+            return Err(Error::Validation(
+                "Ngữ cảnh không được vượt quá 64 ký tự.".to_string(),
+            ));
+        }
+        if self.module.len() > 64 {
+            return Err(Error::Validation(
+                "Module không được vượt quá 64 ký tự.".to_string(),
+            ));
+        }
+        if self.description.len() > 4096
+            || self.decision.len() > 4096
+            || self.rationale.len() > 4096
+        {
+            return Err(Error::Validation(
+                "Mô tả, Quyết định, và Lý do không được vượt quá 4096 ký tự.".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Thêm một bản ghi bộ nhớ mới.
 /// Mục đích: Cung cấp giao diện `add` cho `knowledge` CLI.
 #[allow(clippy::too_many_arguments)]
