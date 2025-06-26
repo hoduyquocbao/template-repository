@@ -129,7 +129,7 @@ impl Showable for Summary {
 #[allow(clippy::too_many_arguments)]
 pub async fn add<S: Storage>(
     store: &S,
-    kind_str: String,
+    kind: String,
     context: String,
     module: String,
     subject: String,
@@ -137,8 +137,8 @@ pub async fn add<S: Storage>(
     decision: String,
     rationale: String,
 ) -> Result<Entry, Error> {
-    info!(kind = %kind_str, context = %context, "Đang thêm bộ nhớ mới");
-    let kind = Kind::try_from(kind_str)?; // Chuyển đổi và xác thực loại
+    info!(kind = %kind, context = %context, "Đang thêm bộ nhớ mới");
+    let kind = Kind::try_from(kind)?; // Chuyển đổi và xác thực loại
     
     // Kiểm tra các trường bắt buộc
     if context.trim().is_empty() || module.trim().is_empty() || subject.trim().is_empty() {

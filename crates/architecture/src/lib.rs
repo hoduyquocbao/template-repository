@@ -154,10 +154,10 @@ impl Showable for Summary {
 }
 
 /// Thêm một bản ghi kiến trúc mới. Chỉ insert, không upsert.
-pub async fn add<S: Storage>(store: &S, mut new_entry: Entry) -> Result<Entry, Error> {
-    new_entry.created = now();
-    store.insert(new_entry.clone()).await?;
-    Ok(new_entry)
+pub async fn add<S: Storage>(store: &S, mut entry: Entry) -> Result<Entry, Error> {
+    entry.created = now();
+    store.insert(entry.clone()).await?;
+    Ok(entry)
 }
 
 /// Tìm một bản ghi kiến trúc bằng key.

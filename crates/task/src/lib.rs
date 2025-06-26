@@ -155,15 +155,15 @@ pub async fn add<S: Storage>(
     store: &S,
     context: String,
     module: String,
-    task_desc: String,
+    desc: String,
     priority: Priority,
     status: Status,
     assignee: String,
     due: String,
     notes: String,
 ) -> Result<Entry, Error> {
-    info!(task = %task_desc, "Đang thêm công việc mới");
-    if task_desc.is_empty() {
+    info!(task = %desc, "Đang thêm công việc mới");
+    if desc.is_empty() {
         warn!("Cố gắng thêm công việc với nội dung rỗng");
         return Err(Error::Validation(vec![Fault {
             field: "task".to_string(),
@@ -175,7 +175,7 @@ pub async fn add<S: Storage>(
         id: Id::new_v4(),
         context,
         module,
-        task: task_desc,
+        task: desc,
         priority,
         status,
         assignee,
@@ -280,7 +280,7 @@ mod tests {
     }
     
     #[test]
-    // Kiểm tra cập nhật trạng thái task (gốc: change_task_status)
+    // Kiểm tra cập nhật trạng thái task (gốc: change_status)
     fn update() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
