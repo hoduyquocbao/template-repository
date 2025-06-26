@@ -22,3 +22,9 @@ criterion = { version = "0.4", features = ["html_reports"] }
 [[bench]]
 name = "bench"
 harness = false
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

@@ -41,13 +41,13 @@ rand = "0.8"
 # Tối ưu hóa các bản build phát hành để đạt hiệu năng tối đa
 [profile.release]
 # Bật Link Time Optimization (LTO) để cải thiện hiệu năng với chi phí thời gian biên dịch
-lto = "fat"
+lto = true
 # Đặt thành 1 để tối ưu hóa tối đa nhưng thời gian biên dịch lâu hơn
 codegen-units = 1
 # Sử dụng abort thay vì unwind cho panic trong chế độ phát hành để giảm kích thước binary
 panic = "abort"
 # Bật tối ưu hóa ở mức tối đa
-opt-level = 3
+opt-level = "z"
 # Loại bỏ các ký hiệu debug để giảm kích thước binary
 strip = true
 # Vô hiệu hóa biên dịch gia tăng trong chế độ phát hành
