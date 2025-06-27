@@ -153,4 +153,140 @@ impl Registry {
         }
         stats.join("\n") // Ghép thành một chuỗi duy nhất
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use std::thread;
+
+    #[test]
+    fn record() {
+        let metric = Metric::new();
+        
+        // Test ghi nhận thành công
+        let start = Instant::now();
+        thread::sleep(Duration::from_millis(10)); // Tạo độ trễ nhỏ
+        metric.record(start, false);
+        
+        // Test ghi nhận thất bại
+        let start = Instant::now();
+        thread::sleep(Duration::from_millis(5));
+        metric.record(start, true);
+        
+        let stats = metric.stats();
+        assert!(stats.contains("Tổng: 2 lần"));
+        assert!(stats.contains("1 thành công"));
+        assert!(stats.contains("1 thất bại"));
+        assert!(stats.contains("Thời gian trung bình:"));
+    }
+
+    #[test]
+    fn rate() {
+        let metric = Metric::new();
+        
+        // 3 thành công, 1 thất bại
+        for _ in 0..3 {
+            let start = Instant::now();
+            metric.record(start, false);
+        }
+        let start = Instant::now();
+        metric.record(start, true);
+        
+        let rate = metric.rate();
+        assert!((rate - 0.333333).abs() < 0.001); // 1/3 ≈ 0.333333
+    }
+
+    #[test]
+    fn registry() {
+        let registry = Registry::new();
+        
+        // Test ghi nhận các loại thao tác khác nhau
+        registry.record("insert", false);
+        registry.record("fetch", false);
+        registry.record("update", true);
+        registry.record("delete", false);
+        
+        // Test thống kê async
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let stats = registry.stats().await;
+            assert!(stats.contains("insert"));
+            assert!(stats.contains("fetch"));
+            assert!(stats.contains("update"));
+            assert!(stats.contains("delete"));
+            assert!(stats.contains("1 thành công"));
+            assert!(stats.contains("1 thất bại"));
+        });
+    }
+
+    #[test]
+    fn concurrent() {
+        let registry = Registry::new();
+        let mut handles = vec![];
+        
+        // Tạo nhiều thread ghi metric đồng thời
+        for _i in 0..10 {
+            let clone = registry.clone();
+            let handle = std::thread::spawn(move || {
+                for j in 0..100 {
+                    let operation = if j % 3 == 0 { "insert" } else if j % 3 == 1 { "fetch" } else { "update" };
+                    let failed = j % 10 == 0; // 10% thất bại
+                    clone.record(operation, failed);
+                }
+            });
+            handles.push(handle);
+        }
+        
+        // Đợi tất cả thread hoàn thành
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        // Đợi thêm để đảm bảo atomic cập nhật xong
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        
+        // Kiểm tra thống kê
+        let stats = std::thread::spawn({
+            let registry = registry.clone();
+            move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async move {
+                    registry.stats().await
+                })
+            }
+        }).join().unwrap();
+        
+        println!("Registry concurrent stats: {}", stats);
+        
+        // Kiểm tra từng loại metric có tổng > 0
+        assert!(stats.contains("insert: Tổng:"));
+        assert!(stats.contains("fetch: Tổng:"));
+        assert!(stats.contains("update: Tổng:"));
+        
+        // Kiểm tra có ít nhất một loại có tổng > 0
+        let found = stats.lines().any(|line| {
+            if let Some(idx) = line.find(": Tổng: ") {
+                let rest = &line[idx+8..]; // Bỏ qua ": Tổng: "
+                // Tìm số đầu tiên trong phần còn lại
+                for word in rest.split_whitespace() {
+                    if let Ok(count) = word.parse::<usize>() {
+                        return count > 0;
+                    }
+                }
+            }
+            false
+        });
+        
+        assert!(found, "Phải có ít nhất một loại metric có tổng > 0");
+    }
+
+    #[test]
+    fn empty() {
+        let metric = Metric::new();
+        let stats = metric.stats();
+        assert_eq!(stats, "Chưa có dữ liệu");
+        
+        let rate = metric.rate();
+        assert_eq!(rate, 0.0);
+    }
 } 
