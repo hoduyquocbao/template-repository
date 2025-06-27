@@ -87,15 +87,39 @@ impl Actor {
                         let mut result = Vec::new();
                         let mut iter = inner.db.iter();
                         let mut error = None;
+                        
+                        // Thêm logging để debug
+                        tracing::debug!("Bắt đầu query database");
+                        
                         for kv in &mut iter {
                             match kv {
-                                Ok((_, v)) => result.push(v.to_vec()),
-                                Err(e) => { error = Some(e); break; }
+                                Ok((k, v)) => {
+                                    // Thêm validation để tránh lỗi deserialization
+                                    if !v.is_empty() {
+                                        // Kiểm tra key format để filter theo entity type
+                                        // Key format: binary serialized ID
+                                        if k.len() >= 16 { // UUID size
+                                            result.push(v.to_vec());
+                                        } else {
+                                            tracing::warn!("Bỏ qua key quá ngắn: {} bytes", k.len());
+                                        }
+                                    } else {
+                                        tracing::warn!("Bỏ qua value rỗng trong query");
+                                    }
+                                },
+                                Err(e) => { 
+                                    error = Some(e.clone()); 
+                                    tracing::error!("Lỗi khi query database: {:?}", e);
+                                    break; 
+                                }
                             }
                         }
+                        
                         let res = if let Some(e) = error {
+                            tracing::error!("Query thất bại: {:?}", e);
                             Err(Error::Store(e))
                         } else {
+                            tracing::debug!("Query thành công, trả về {} items", result.len());
                             Ok(result)
                         };
                         

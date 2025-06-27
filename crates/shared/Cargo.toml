@@ -3,6 +3,10 @@ name = "shared"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Feature metrics để bật/tắt hệ thống đo lường hiệu suất
+metrics = []
+
 [dependencies]
 repository = { path = "../repository" }
 serde = { version = "1.0", features = ["derive"] }

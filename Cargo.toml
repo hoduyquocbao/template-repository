@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/architecture",
+    "crates/kernel",
     "crates/knowledge",
     "crates/memories", "crates/naming",
     "crates/repository",

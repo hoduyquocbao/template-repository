@@ -3,6 +3,10 @@ name = "architecture"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Feature metrics để bật/tắt hệ thống đo lường hiệu suất
+metrics = []
+
 [dependencies]
 serde = { workspace = true }
 csv = { workspace = true }

@@ -124,6 +124,8 @@ pub async fn list<S: Storage>(
     module: Option<String>,
     limit: usize,
 ) -> Result<Box<dyn Iterator<Item = Result<architecture::Summary, repository::Error>> + Send>, repository::Error> {
+    info!(r#type = ?r#type, context = ?context, module = ?module, limit = limit, "Đang thực hiện architecture list query");
+    
     let mut prefix = Vec::new();
     if let Some(type_str) = r#type {
         let kind = architecture::Kind::try_from(type_str)?;
@@ -136,7 +138,17 @@ pub async fn list<S: Storage>(
             }
         }
     }
+    
+    info!(prefix_len = prefix.len(), "Query prefix: {:?}", prefix);
+    
     let query = shared::query(prefix, None::<Vec<u8>>, limit);
-    architecture::query(store, query).await
+    let result = architecture::query(store, query).await;
+    
+    match &result {
+        Ok(_) => info!("Architecture list query thành công"),
+        Err(e) => tracing::error!(error = ?e, "Architecture list query thất bại"),
+    }
+    
+    result
 }
 

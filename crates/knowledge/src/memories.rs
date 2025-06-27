@@ -105,6 +105,8 @@ pub async fn list<S: Storage>(
     kind: Option<String>,
     limit: usize,
 ) -> Result<Box<dyn Iterator<Item = Result<memories::Summary, repository::Error>> + Send>, repository::Error> {
+    info!(kind = ?kind, limit = limit, "Đang thực hiện memories list query");
+    
     let prefix = match kind {
         Some(s) => {
             let kind = Kind::try_from(s)?;
@@ -112,7 +114,17 @@ pub async fn list<S: Storage>(
         }
         None => Vec::new(),
     };
+    
+    info!(prefix_len = prefix.len(), "Query prefix: {:?}", prefix);
+    
     let query = shared::query(prefix, None::<Vec<u8>>, limit);
-    memories::query(store, query).await
+    let result = memories::query(store, query).await;
+    
+    match &result {
+        Ok(_) => info!("Memories list query thành công"),
+        Err(e) => tracing::error!(error = ?e, "Memories list query thất bại"),
+    }
+    
+    result
 }
 

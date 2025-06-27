@@ -1,0 +1,28 @@
+ID,Context,Module,Type,Name,Responsibility,Dependency,PerformanceNote,NamingRationale
+arch-001,System,repository,Core,Storage,Trait định nghĩa interface lưu trữ dữ liệu,None,O(1) cho CRUD operations,Storage là từ đơn mô tả khả năng lưu trữ
+arch-002,System,repository,Implementation,Sled,Triển khai Storage với Sled database,Storage,O(log n) cho query, Sled là tên database engine
+arch-003,System,repository,Pattern,Actor,Mô hình Actor cho xử lý bất đồng bộ,Storage,O(1) message passing, Actor là pattern design đơn từ
+arch-004,System,repository,Component,Metric,Đo lường hiệu suất và monitoring,None,O(1) record operations, Metric là từ đơn cho đo lường
+arch-005,System,repository,Component,Cache,Bộ nhớ đệm để tối ưu truy cập,Storage,O(1) lookup, Cache là từ đơn cho bộ nhớ đệm
+arch-006,System,repository,Component,Pool,Quản lý connection pool,Storage,O(1) allocation, Pool là từ đơn cho nhóm tài nguyên
+arch-007,System,shared,Core,Interaction,Định nghĩa tương tác giữa các module,None,O(1) message passing, Interaction là từ đơn cho tương tác
+arch-008,System,knowledge,CLI,Command,Xử lý lệnh CLI,shared,repository,O(1) command routing, Command là từ đơn cho lệnh
+arch-009,System,task,Entity,Entry,Đại diện cho một task,repository,O(1) CRUD, Entry là từ đơn cho bản ghi
+arch-010,System,memories,Entity,Entry,Đại diện cho một memory,repository,O(1) CRUD, Entry là từ đơn cho bản ghi
+arch-011,System,architecture,Entity,Entry,Đại diện cho một architecture decision,repository,O(1) CRUD, Entry là từ đơn cho bản ghi
+arch-012,System,naming,Utility,Checker,Kiểm tra quy tắc đặt tên,None,O(n) cho file scan, Checker là từ đơn cho kiểm tra
+arch-013,Framework,kernel,Foundation,Engine,Core engine cho framework,None,O(1) initialization, Engine là từ đơn cho động cơ (Đã đổi tên từ core → kernel để tránh xung đột std::core và nhấn mạnh vai trò foundation engine)
+arch-014,Framework,kernel,Foundation,Builder,Pattern builder cho cấu hình,Engine,O(1) fluent API, Builder là từ đơn cho xây dựng
+arch-015,Framework,kernel,Foundation,Router,Định tuyến request/command,Engine,O(1) routing, Router là từ đơn cho định tuyến
+arch-016,Framework,kernel,Foundation,Plugin,Interface cho plugin system,Engine,O(1) plugin loading, Plugin là từ đơn cho mở rộng
+arch-017,Framework,kernel,Foundation,Config,Quản lý cấu hình,Engine,O(1) config access, Config là từ đơn cho cấu hình
+arch-018,Framework,kernel,Foundation,Logger,Logging system,Engine,O(1) log operations, Logger là từ đơn cho ghi log
+arch-019,Framework,kernel,Foundation,Validator,Validation system,Engine,O(n) validation, Validator là từ đơn cho xác thực
+arch-020,Framework,kernel,Foundation,Serializer,Serialization system,Engine,O(n) serialization, Serializer là từ đơn cho tuần tự hóa
+arch-021,Framework,knowledge,Facade,CLI,Điểm vào duy nhất cho toàn bộ hệ thống,task,memories,architecture,kernel,O(1) command dispatch, CLI là từ đơn cho giao diện dòng lệnh
+arch-022,Framework,knowledge,Pattern,Handler,Xử lý command/interaction,CLI,O(1) handler dispatch, Handler là từ đơn cho xử lý
+arch-023,Framework,knowledge,Pattern,Interaction,Đóng gói metadata cho mọi command,CLI,O(1) metadata attach, Interaction là từ đơn cho tương tác
+arch-024,Framework,knowledge,Pattern,Validator,Kiểm tra input cho mọi command,CLI,kernel,O(n) validation, Validator là từ đơn cho xác thực
+arch-025,Framework,knowledge,Pattern,Logger,Ghi log structured cho mọi thao tác,CLI,kernel,O(1) log, Logger là từ đơn cho ghi log
+arch-026,Framework,knowledge,Pattern,Serializer,Tuần tự hóa dữ liệu khi export/import,CLI,kernel,O(n) serialization, Serializer là từ đơn cho tuần tự hóa
+arch-027,Framework,knowledge,Pattern,Metrics,Thu thập, export, monitoring số liệu,CLI,kernel,O(1) record, Metrics là từ đơn cho đo lường 

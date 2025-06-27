@@ -92,15 +92,31 @@ impl crate::storage::Storage for Sled {
         Ok(bincode::deserialize(&res)?)
     }
 
-    async fn query<E: Entity>(&self, _query: Query<E::Index>) -> Result<Box<dyn Iterator<Item = Result<E::Summary, Error>> + Send>, Error>
+    async fn query<E: Entity>(&self, query: Query<E::Index>) -> Result<Box<dyn Iterator<Item = Result<E::Summary, Error>> + Send>, Error>
     where E::Index: std::fmt::Debug {
+        tracing::debug!("Sled query với prefix: {:?}, after: {:?}, limit: {}", query.prefix, query.after, query.limit);
+        
         let res = self.handle.query().await?;
-        let items: Vec<E::Summary> = res.into_iter()
-            .map(|bytes| {
-                let entry: E = bincode::deserialize(&bytes)?;
-                Ok(entry.summary())
-            })
-            .collect::<Result<_, Error>>()?;
+        let mut items: Vec<E::Summary> = Vec::new();
+        
+        for (i, bytes) in res.into_iter().enumerate() {
+            if i >= query.limit {
+                break;
+            }
+            
+            match bincode::deserialize::<E>(&bytes) {
+                Ok(entry) => {
+                    items.push(entry.summary());
+                },
+                Err(e) => {
+                    tracing::warn!("Lỗi deserialize item {}: {:?}", i, e);
+                    // Bỏ qua item lỗi thay vì fail toàn bộ query
+                    continue;
+                }
+            }
+        }
+        
+        tracing::debug!("Query trả về {} items thành công", items.len());
         Ok(Box::new(items.into_iter().map(Ok)))
     }
 

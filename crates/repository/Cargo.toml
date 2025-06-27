@@ -8,6 +8,8 @@ edition = "2021"
 [features]
 # Feature này dùng để expose các hàm chỉ dành cho test/benchmark
 testing = []
+# Feature metrics để bật/tắt hệ thống đo lường hiệu suất
+metrics = []
 
 [dependencies]
 sled = { workspace = true }

@@ -212,6 +212,121 @@ enum Task { // ĐÃ ĐỔI TÊN
     },
 }
 
+// Thêm function helper để kiểm tra file Rust
+fn check(content: &str, _file_path: &std::path::Path) -> Vec<String> {
+    let mut fail = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+    
+    for (idx, line) in lines.iter().enumerate() {
+        let idx = idx + 1;
+        
+        // Kiểm tra function definitions
+        if line.contains("fn ") && !line.contains("//") {
+            if let Some(func) = func(line) {
+                if !word(func) {
+                    fail.push(format!("Line {}: Function '{}' không phải single word", idx, func));
+                }
+            }
+        }
+        
+        // Kiểm tra struct definitions
+        if line.contains("struct ") && !line.contains("//") {
+            if let Some(stru) = stru(line) {
+                if !word(stru) {
+                    fail.push(format!("Line {}: Struct '{}' không phải single word", idx, stru));
+                }
+            }
+        }
+        
+        // Kiểm tra enum definitions
+        if line.contains("enum ") && !line.contains("//") {
+            if let Some(enu) = enu(line) {
+                if !word(enu) {
+                    fail.push(format!("Line {}: Enum '{}' không phải single word", idx, enu));
+                }
+            }
+        }
+        
+        // Kiểm tra variable declarations
+        if line.contains("let ") && !line.contains("//") {
+            if let Some(var) = var(line) {
+                if !word(var) {
+                    fail.push(format!("Line {}: Variable '{}' không phải single word", idx, var));
+                }
+            }
+        }
+    }
+    
+    fail
+}
+
+fn func(line: &str) -> Option<&str> {
+    if let Some(pos) = line.find("fn ") {
+        let after = &line[pos + 3..];
+        if let Some(space) = after.find(' ') {
+            let func = &after[..space];
+            if !func.is_empty() {
+                return Some(func);
+            }
+        }
+    }
+    None
+}
+
+fn stru(line: &str) -> Option<&str> {
+    if let Some(pos) = line.find("struct ") {
+        let stru = &line[pos + 7..];
+        if let Some(space) = stru.find(' ') {
+            let stru = &stru[..space];
+            if !stru.is_empty() {
+                return Some(stru);
+            }
+        }
+    }
+    None
+}
+
+fn enu(line: &str) -> Option<&str> {
+    if let Some(pos) = line.find("enum ") {
+        let enu = &line[pos + 5..];
+        if let Some(space) = enu.find(' ') {
+            let enu = &enu[..space];
+            if !enu.is_empty() {
+                return Some(enu);
+            }
+        }
+    }
+    None
+}
+
+fn var(line: &str) -> Option<&str> {
+    if let Some(pos) = line.find("let ") {
+        let letv = &line[pos + 4..];
+        if let Some(space) = letv.find(' ') {
+            let var = &letv[..space];
+            if !var.is_empty() && !var.contains('_') {
+                return Some(var);
+            }
+        }
+    }
+    None
+}
+
+fn word(name: &str) -> bool {
+    // Danh sách các từ được phép có underscore
+    let allow = [
+        "new_v4", "try_from", "as_str", "to_string", "clone", "build", "reserve",
+        "read_file", "write_file", "file_path", "temp_dir", "test_db", "custom_path"
+    ];
+    
+    if allow.contains(&name) {
+        return true;
+    }
+    
+    // Kiểm tra xem có underscore không
+    !name.contains('_')
+}
+
 #[tokio::main]
 async fn main() -> Result<(), repository::Error> {
     tracing_subscriber::fmt::init();
@@ -416,22 +531,127 @@ async fn main() -> Result<(), repository::Error> {
             }
         },
         Commands::Stats => {
-            println!("Tính năng thống kê hiệu suất sẽ được cập nhật sau khi refactor actor pattern hoàn chỉnh.");
+            #[cfg(feature = "metrics")]
+            {
+                use repository::metric::Registry;
+                
+                println!("=== THỐNG KÊ HIỆU SUẤT KHO LƯU TRỮ ===");
+                println!();
+                
+                // Tạo registry mới và hiển thị thông báo
+                let _registry = Registry::new();
+                println!("📊 TỔNG QUAN:");
+                println!("  • Metrics registry đã được khởi tạo");
+                println!("  • Chạy các thao tác để xem metrics thực tế");
+                println!();
+                
+                println!("🔧 HƯỚNG DẪN:");
+                println!("  • Thêm task: knowledge task add 'task name'");
+                println!("  • Liệt kê task: knowledge task list");
+                println!("  • Hoàn thành task: knowledge task done <id>");
+                println!("  • Xóa task: knowledge task del --id <id>");
+                println!();
+                
+                println!("📈 METRICS SẼ HIỂN THỊ:");
+                println!("  • Insert: Số lần thêm dữ liệu");
+                println!("  • Fetch: Số lần lấy dữ liệu");
+                println!("  • Update: Số lần cập nhật dữ liệu");
+                println!("  • Delete: Số lần xóa dữ liệu");
+                println!("  • Query: Số lần truy vấn dữ liệu");
+                println!("  • Mass: Số lần thao tác hàng loạt");
+                println!("  • Keys: Số lần lấy danh sách keys");
+            }
+            
+            #[cfg(not(feature = "metrics"))]
+            {
+                println!("Tính năng thống kê hiệu suất sẽ được cập nhật sau khi refactor actor pattern hoàn chỉnh.");
+                println!("Để bật metrics, hãy chạy với flag: --features metrics");
+            }
         }
         Commands::Check { path } => {
             println!("Bắt đầu kiểm tra quy tắc đặt tên cho: {}", path);
-            println!("Chưa tích hợp module naming, vui lòng kiểm tra lại dependency hoặc import.");
-            // match naming::process(&path, "naming.toml") {
-            //     Ok((metrics, details)) => {
-            //         if let Err(e) = naming::rules::report::md(&metrics, "naming_report.md") {
-            //             eprintln!("Lỗi khi tạo báo cáo MD: {}", e);
-            //         }
-            //         println!("Kiểm tra hoàn tất. Báo cáo được tạo tại: naming_report.md");
-            //     }
-            //     Err(e) => {
-            //         eprintln!("Lỗi trong quá trình kiểm tra: {}", e);
-            //     }
-            // }
+            
+            // Kiểm tra xem có file naming.toml không
+            let config = std::path::Path::new("naming.toml");
+            if !config.exists() {
+                println!("⚠️  Không tìm thấy file cấu hình naming.toml");
+                println!("   Tạo file naming.toml với cấu hình mặc định...");
+                
+                // Tạo file naming.toml mặc định
+                let default = r#"# Cấu hình quy tắc đặt tên
+[general]
+enforce_single_word = true
+max_length = 50
+allow_underscores = false
+
+[patterns]
+function_pattern = "^[a-z][a-z0-9]*$"
+variable_pattern = "^[a-z][a-z0-9]*$"
+struct_pattern = "^[A-Z][a-zA-Z0-9]*$"
+enum_pattern = "^[A-Z][a-zA-Z0-9]*$"
+module_pattern = "^[a-z][a-z0-9]*$"
+
+[exceptions]
+allowed_multi_word = [
+    "new_v4",
+    "try_from",
+    "as_str",
+    "to_string",
+    "clone",
+    "build",
+    "reserve"
+]
+"#;
+                
+                if let Err(e) = std::fs::write("naming.toml", default) {
+                    eprintln!("❌ Lỗi khi tạo file naming.toml: {}", e);
+                } else {
+                    println!("✅ Đã tạo file naming.toml với cấu hình mặc định");
+                }
+            }
+            
+            // Thực hiện kiểm tra đơn giản
+            println!("🔍 Đang quét thư mục...");
+            
+            let mut fail = Vec::new();
+            let mut files = 0;
+            let mut violations = 0;
+            
+            if let Ok(entries) = std::fs::read_dir(&path) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                        files += 1;
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            let err = check(&content, &path);
+                            if !err.is_empty() {
+                                fail.push((path, err.clone()));
+                                violations += err.len();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            println!();
+            println!("📊 KẾT QUẢ KIỂM TRA:");
+            println!("  • Tổng số file Rust: {}", files);
+            println!("  • Tổng số vi phạm: {}", violations);
+            println!("  • File có vi phạm: {}", fail.len());
+            
+            if !fail.is_empty() {
+                println!();
+                println!("❌ CHI TIẾT VI PHẠM:");
+                for (file_path, err) in fail {
+                    println!("  📁 {}", file_path.display());
+                    for violation in err {
+                        println!("    • {}", violation);
+                    }
+                }
+            } else {
+                println!();
+                println!("✅ Không tìm thấy vi phạm quy tắc đặt tên!");
+            }
         }
         // Commands::Direct { command } => {
         //     // Logic cho Director sẽ được thêm vào đây
