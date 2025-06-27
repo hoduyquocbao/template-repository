@@ -112,6 +112,26 @@ impl Registry {
         }
     }
     
+    /// Ghi lại metric đồng bộ cho một thao tác
+    /// Mục đích: Cho phép Actor thread ghi metric mà không cần async
+    /// Thuật toán: Sử dụng try_write để tránh deadlock, fallback về async nếu cần
+    pub fn record(&self, name: &str, failed: bool) {
+        let start = Instant::now();
+        
+        // Thử sử dụng try_write trước để tránh deadlock
+        if let Ok(mut map) = self.map.try_write() {
+            let metric = map.entry(name.to_string())
+                .or_insert_with(Metric::new)
+                .clone();
+            drop(map); // Giải phóng lock trước khi gọi record
+            metric.record(start, failed);
+        } else {
+            // Fallback: tạo metric mới nếu không thể acquire lock
+            let metric = Metric::new();
+            metric.record(start, failed);
+        }
+    }
+    
     /// Lấy metric cho một thao tác, tạo mới nếu chưa có
     /// Mục đích: Đảm bảo mọi thao tác đều có metric riêng biệt
     /// Thuật toán: Sử dụng entry API để lấy hoặc chèn metric mới

@@ -46,23 +46,40 @@ pub struct Actor {
 impl Actor {
     pub(crate) fn new(inner: Inner) -> Self {
         let (tx, mut rx) = mpsc::channel::<Message>(128);
+        let metric = inner.metric.clone();
         thread::spawn(move || {
             while let Some(msg) = rx.blocking_recv() {
                 match msg {
                     Message::Insert { key, value, respond } => {
                         let res = inner.db.insert(&key[..], &value[..]).map(|_| ()).map_err(Error::Store);
+                        
+                        // Ghi lại metric với tên "insert" và kết quả của thao tác
+                        metric.record("insert", res.is_err());
+                        
                         let _ = respond.send(res);
                     }
                     Message::Fetch { key, respond } => {
                         let res = inner.db.get(&key[..]).map(|opt| opt.map(|v| v.to_vec())).map_err(Error::Store);
+                        
+                        // Ghi lại metric với tên "fetch"
+                        metric.record("fetch", res.is_err());
+
                         let _ = respond.send(res);
                     }
                     Message::Update { key, value, respond } => {
                         let res = inner.db.insert(&key[..], &value[..]).map(|_| value.clone()).map_err(Error::Store);
+                        
+                        // Ghi lại metric với tên "update"
+                        metric.record("update", res.is_err());
+                        
                         let _ = respond.send(res);
                     }
                     Message::Delete { key, respond } => {
                         let res = inner.db.remove(&key[..]).map(|opt| opt.map(|v| v.to_vec()).unwrap_or_default()).map_err(Error::Store);
+                        
+                        // Ghi lại metric với tên "delete"
+                        metric.record("delete", res.is_err());
+                        
                         let _ = respond.send(res);
                     }
                     Message::Query { respond } => {
@@ -75,11 +92,16 @@ impl Actor {
                                 Err(e) => { error = Some(e); break; }
                             }
                         }
-                        if let Some(e) = error {
-                            let _ = respond.send(Err(Error::Store(e)));
+                        let res = if let Some(e) = error {
+                            Err(Error::Store(e))
                         } else {
-                            let _ = respond.send(Ok(result));
-                        }
+                            Ok(result)
+                        };
+                        
+                        // Ghi lại metric với tên "query"
+                        metric.record("query", res.is_err());
+                        
+                        let _ = respond.send(res);
                     }
                     Message::Mass { entries, respond } => {
                         let mut ok = true;
@@ -89,7 +111,12 @@ impl Actor {
                                 break;
                             }
                         }
-                        let _ = respond.send(if ok { Ok(()) } else { Err(Error::Aborted) });
+                        let res = if ok { Ok(()) } else { Err(Error::Aborted) };
+                        
+                        // Ghi lại metric với tên "mass"
+                        metric.record("mass", res.is_err());
+                        
+                        let _ = respond.send(res);
                     }
                     Message::Keys { respond } => {
                         let mut result = Vec::new();
@@ -101,11 +128,16 @@ impl Actor {
                                 Err(e) => { error = Some(e); break; }
                             }
                         }
-                        if let Some(e) = error {
-                            let _ = respond.send(Err(Error::Store(e)));
+                        let res = if let Some(e) = error {
+                            Err(Error::Store(e))
                         } else {
-                            let _ = respond.send(Ok(result));
-                        }
+                            Ok(result)
+                        };
+                        
+                        // Ghi lại metric với tên "keys"
+                        metric.record("keys", res.is_err());
+                        
+                        let _ = respond.send(res);
                     }
                 }
             }
