@@ -1,8 +1,0 @@
-
-=== Benchmark naming (sequential) ===
-Files: 8
-Min: 114 ms, Max: 136 ms, Avg: 125.9 ms, Total: 1055 ms
-
-=== Benchmark naming (parallel) ===
-Files: 8
-Min: 246 ms, Max: 250 ms, Avg: 248.1 ms, Total: 263 ms

@@ -42,7 +42,7 @@ pub fn scan(file: &str, config: &crate::rules::Config, found: &mut bool, out: &m
                         if let Some(as_pos) = part.find(" as ") {
                             let alias = part[as_pos+4..].trim();
                             // Kiểm tra alias như các pattern khác
-                            if let Some((name, kind)) = extract_alias(alias) {
+                            if let Some((name, kind)) = check(alias) {
                                 out.push((Some(i+1), name, kind));
                                 *found = true;
                             }
@@ -157,7 +157,7 @@ fn extract(line: &str, config: &Config) -> Option<(String, &'static str)> {
 }
 
 // Hàm kiểm tra alias trong group
-fn extract_alias(alias: &str) -> Option<(String, &'static str)> {
+fn check(alias: &str) -> Option<(String, &'static str)> {
     // Kiểm tra các pattern alias
     let name = alias.to_string();
     if name.contains('_') {
