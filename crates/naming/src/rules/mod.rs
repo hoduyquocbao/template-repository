@@ -32,6 +32,7 @@ pub struct Config {
     pub pascal: Option<bool>,
     pub snake: Option<bool>,
     pub camel: Option<bool>,
+    pub alias: Option<bool>,
     pub length: Option<bool>,
     pub min: Option<usize>,
     pub max: Option<usize>,

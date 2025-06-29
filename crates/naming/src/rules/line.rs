@@ -6,6 +6,14 @@ use once_cell::sync::Lazy;
 use crate::helper::text;
 
 static PATTERNS: Lazy<Vec<(regex::Regex, &'static str)>> = Lazy::new(|| vec![
+    // Alias patterns (ưu tiên cao nhất)
+    (regex::Regex::new(r"^use\s+.*\s+as\s+([A-Z][A-Za-z0-9]*)").unwrap(), "AliasPascalCase"),
+    (regex::Regex::new(r"^pub\s+use\s+.*\s+as\s+([A-Z][A-Za-z0-9]*)").unwrap(), "AliasPascalCase"),
+    (regex::Regex::new(r"^use\s+.*\s+as\s+([a-z]+[A-Z][a-zA-Z0-9]*)").unwrap(), "AliasCamelCase"),
+    (regex::Regex::new(r"^pub\s+use\s+.*\s+as\s+([a-z]+[A-Z][a-zA-Z0-9]*)").unwrap(), "AliasCamelCase"),
+    (regex::Regex::new(r"^use\s+.*\s+as\s+([a-z0-9]+_[a-z0-9_]+)").unwrap(), "AliasSnakeCase"),
+    (regex::Regex::new(r"^pub\s+use\s+.*\s+as\s+([a-z0-9]+_[a-z0-9_]+)").unwrap(), "AliasSnakeCase"),
+    // Regular patterns
     (regex::Regex::new(r"^(struct|trait|enum|union|type)\s+([A-Z][A-Za-z0-9]*)").unwrap(), "PascalCase"),
     (regex::Regex::new(r"^(pub\s+)?(let|fn|const|static)\s+(mut\s+)?([a-z]+[A-Z][a-zA-Z0-9]*)").unwrap(), "camelCase"),
     (regex::Regex::new(r"^(pub\s+)?(let|fn|const|static)\s+(mut\s+)?([a-z0-9]+_[a-z0-9_]+)").unwrap(), "snake_case"),
@@ -23,11 +31,34 @@ pub fn scan(file: &str, config: &crate::rules::Config, found: &mut bool, out: &m
             Ok(l) => l,
             Err(e) => return Err(format!("Lỗi đọc dòng {i} file {file}: {e}")),
         };
+        let trimmed = text::trim(&line);
+        // Xử lý group alias: use foo::{Bar as Baz, Qux as Quux};
+        if trimmed.starts_with("use ") && trimmed.contains("{") && trimmed.contains("}") {
+            if let Some(start) = trimmed.find('{') {
+                if let Some(end) = trimmed.find('}') {
+                    let group = &trimmed[start+1..end];
+                    for part in group.split(',') {
+                        let part = part.trim();
+                        if let Some(as_pos) = part.find(" as ") {
+                            let alias = part[as_pos+4..].trim();
+                            // Kiểm tra alias như các pattern khác
+                            if let Some((name, kind)) = extract_alias(alias) {
+                                out.push((Some(i+1), name, kind));
+                                *found = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if let Some((name, kind)) = extract(&line, config) {
             // Kiểm tra enable rule
             if (kind == "PascalCase" && config.pascal == Some(false))
                 || (kind == "snake_case" && config.snake == Some(false))
-                || (kind == "camelCase" && config.camel == Some(false)) {
+                || (kind == "camelCase" && config.camel == Some(false))
+                || (kind == "AliasPascalCase" && config.alias == Some(false))
+                || (kind == "AliasCamelCase" && config.alias == Some(false))
+                || (kind == "AliasSnakeCase" && config.alias == Some(false)) {
                 continue;
             }
             // Kiểm tra độ dài định danh
@@ -100,9 +131,45 @@ fn extract(line: &str, config: &Config) -> Option<(String, &'static str)> {
                     return None;
                 }
             }
+            // Chỉ báo lỗi AliasPascalCase nếu nhiều hub (>=2)
+            if *kind == "AliasPascalCase" {
+                if text::hub(&name) > 1 {
+                    // Vi phạm: AliasPascalCase nhiều hub
+                    return Some((name, *kind));
+                } else {
+                    // Hợp lệ: AliasPascalCase một hub
+                    return None;
+                }
+            }
+            // Báo lỗi AliasCamelCase (luôn vi phạm vì không phải một từ)
+            if *kind == "AliasCamelCase" {
+                return Some((name, *kind));
+            }
+            // Báo lỗi AliasSnakeCase (luôn vi phạm vì không phải một từ)
+            if *kind == "AliasSnakeCase" {
+                return Some((name, *kind));
+            }
             // Các pattern khác giữ nguyên
             return Some((name, *kind));
         }
+    }
+    None
+}
+
+// Hàm kiểm tra alias trong group
+fn extract_alias(alias: &str) -> Option<(String, &'static str)> {
+    // Kiểm tra các pattern alias
+    let name = alias.to_string();
+    if name.contains('_') {
+        return Some((name, "AliasSnakeCase"));
+    }
+    if name.chars().next().map(|c| c.is_lowercase()).unwrap_or(false) {
+        if name.chars().any(|c| c.is_uppercase()) {
+            return Some((name, "AliasCamelCase"));
+        }
+    }
+    if text::hub(&name) > 1 {
+        return Some((name, "AliasPascalCase"));
     }
     None
 } 
