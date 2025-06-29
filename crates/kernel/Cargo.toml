@@ -21,4 +21,8 @@ csv.workspace = true
 [features]
 default = []
 metrics = []
-testing = [] 
+testing = []
+
+[[example]]
+name = "export_demo"
+path = "examples/export_demo.rs" 

@@ -1,1 +1,2 @@
 ID,Type,Context,Module,Subject,Description,Decision,Rationale,Timestamp
+1,Task,Export,storage,Export,Đã hoàn thiện framework export storage hiệu suất cao, không clone, dễ sử dụng, không còn vi phạm naming, không còn lỗi clippy,Completed,Đảm bảo tuân thủ quy tắc một từ, sạch technical debt,2024-06-09T00:00:00Z

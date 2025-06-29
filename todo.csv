@@ -1,1 +1,2 @@
 ID,Context,Module,Task,Priority,Status,Assignee,Due,Notes
+1,Export,storage,Hoàn thiện framework export storage hiệu suất cao,High,Completed,auto,,Đã hoàn thiện, không còn vi phạm naming, không còn lỗi clippy, tài liệu và thử nghiệm đầy đủ.

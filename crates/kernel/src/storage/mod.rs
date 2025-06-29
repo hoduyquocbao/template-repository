@@ -9,7 +9,7 @@
 // Import các thư viện cần thiết cho trait bất đồng bộ, kiểm tra kiểu, và các định nghĩa cốt lõi
 use async_trait::async_trait; // Cho phép định nghĩa trait với hàm async
 use std::fmt::Debug; // Đảm bảo các khóa/chỉ mục có thể debug dễ dàng
-use crate::{Error, entity::{Entity, Query}}; // Import các định nghĩa lỗi, trait Entity và struct Query
+use crate::{Error, storage::entity::{Entity, Query}}; // Import các định nghĩa lỗi, trait Entity và struct Query
 use serde; // Import serde module
 
 /// Hợp đồng cho bất kỳ cơ chế lưu trữ nào muốn làm việc với framework.
@@ -74,5 +74,26 @@ pub trait Storage: Send + Sync { // Trait phải thread-safe để dùng trong m
     where E::Index: Debug;
 }
 
+// --- Các module con của storage ---
 pub mod actor;
 pub mod sled;
+pub mod pool;    // Module quản lý pool kết nối
+pub mod cache;   // Module cache
+pub mod entity;  // Module định nghĩa trait Entity
+pub mod time;    // Module tiện ích thời gian
+pub mod export;  // Module export dữ liệu
+
+// --- Re-export các thành phần từ module export ---
+pub use export::{
+    Exportable,
+    Transformable,
+    Validatable,
+    Streamable,
+    Config,
+    Filter,
+    Format,
+    Stream,
+    Export,
+    Builder,
+    Ext,
+};

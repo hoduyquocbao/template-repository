@@ -1100,6 +1100,7 @@ dependencies = [
  "criterion",
  "csv",
  "erased-serde",
+ "kernel",
  "once_cell",
  "parking_lot 0.12.4",
  "rand",

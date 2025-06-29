@@ -83,6 +83,11 @@ pub enum Error {
     #[error("lỗi csv: {0}")]
     Csv(#[from] csv::Error), // THÊM MỚI
 
+    /// Lỗi khi xử lý dữ liệu JSON.
+    /// Mục đích: Phân biệt lỗi liên quan đến định dạng JSON hoặc đọc/ghi JSON.
+    #[error("lỗi json: {0}")]
+    Json(#[from] serde_json::Error),
+
     /// Lỗi khi phân tích cú pháp.
     #[error("lỗi phân tích cú pháp: {0}")]
     Parse(String),

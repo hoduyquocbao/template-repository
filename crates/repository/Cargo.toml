@@ -12,6 +12,7 @@ testing = []
 metrics = []
 
 [dependencies]
+kernel = { path = "../kernel" }
 sled = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }

@@ -24,12 +24,8 @@
 // Mỗi module đại diện cho một khía cạnh cốt lõi của hệ thống, được đặt tên một từ duy nhất.
 pub mod error;      // Module quản lý lỗi, chuẩn hóa toàn bộ hệ thống lỗi
 pub mod extension;  // Module mở rộng, chuyển đổi lỗi từ bên ngoài về hệ thống
-pub mod entity;     // Module định nghĩa trait Entity, chuẩn hóa thực thể lưu trữ
-pub mod storage;    // Module trait Storage, trừu tượng hóa backend lưu trữ
-pub mod pool;       // Module quản lý pool kết nối, tối ưu concurrency
-pub mod cache;      // Module cache, tăng tốc truy xuất thực thể
+pub mod storage;    // Module trait Storage, trừu tượng hóa backend lưu trữ (bao gồm entity, pool, cache, time)
 pub mod metric;     // Module thu thập metric, quan sát hiệu năng
-pub mod time;       // THÊM MỚI: Module tiện ích thời gian
 pub mod engine;     // Module engine nền tảng
 pub mod config;     // Module cấu hình
 pub mod plugin;     // Module plugin system
@@ -52,8 +48,8 @@ pub use config::Config;
 // Thành tựu: Đảm bảo mọi định danh public đều là một từ tiếng Anh, không lộ chi tiết nội bộ
 pub use error::Error; // Enum lỗi chuẩn hóa, một từ duy nhất
 pub use extension::Extension; // Trait mở rộng lỗi, một từ duy nhất
-pub use entity::{Entity, Query, Key}; // Trait thực thể, struct truy vấn, builder khóa
+pub use storage::entity::{Entity, Query, Key}; // Trait thực thể, struct truy vấn, builder khóa
 pub use uuid::Uuid as Id; // Định danh duy nhất, tái xuất với tên Id (một từ)
-pub use pool::Pool; // Struct pool kết nối, một từ duy nhất
-pub use cache::Cache; // Struct cache, một từ duy nhất
-pub use time::now; // THÊM MỚI: Tái xuất hàm now()
+pub use storage::pool::Pool; // Struct pool kết nối, một từ duy nhất
+pub use storage::cache::Cache; // Struct cache, một từ duy nhất
+pub use storage::time::now; // Tái xuất hàm now()

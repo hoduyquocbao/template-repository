@@ -13,7 +13,7 @@
 use crate::storage::actor::{Handle, Actor, Actorable};
 use crate::Error;
 use async_trait::async_trait;
-use crate::entity::{Entity, Query};
+use crate::storage::entity::{Entity, Query};
 
 /// Wrapper xung quanh actor lưu trữ
 /// Mục đích: Gom nhóm các thành phần lưu trữ qua actor để tối ưu hóa hiệu năng và khả năng mở rộng
@@ -34,9 +34,9 @@ impl Sled {
 pub(crate) struct Inner {
     pub db: sled::Db,
     #[allow(dead_code)]
-    pub pool: crate::pool::Pool<sled::Db>,
+    pub pool: crate::storage::pool::Pool<sled::Db>,
     #[allow(dead_code)]
-    pub cache: crate::cache::Cache<Vec<u8>, Vec<u8>>,
+    pub cache: crate::storage::cache::Cache<Vec<u8>, Vec<u8>>,
     #[allow(dead_code)]
     pub metric: crate::metric::Registry,
 }
@@ -47,8 +47,8 @@ impl Inner {
             .path(path)
             .temporary(path.is_empty())
             .open()?;
-        let pool = crate::pool::Pool::new(10, || Ok(db.clone()))?;
-        let cache = crate::cache::Cache::new(std::time::Duration::from_secs(300));
+        let pool = crate::storage::pool::Pool::new(10, || Ok(db.clone()))?;
+        let cache = crate::storage::cache::Cache::new(std::time::Duration::from_secs(300));
         let metric = crate::metric::Registry::new();
         Ok(Self { db, pool, cache, metric })
     }

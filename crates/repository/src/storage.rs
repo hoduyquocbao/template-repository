@@ -9,7 +9,8 @@
 // Import các thư viện cần thiết cho trait bất đồng bộ, kiểm tra kiểu, và các định nghĩa cốt lõi
 use async_trait::async_trait; // Cho phép định nghĩa trait với hàm async
 use std::fmt::Debug; // Đảm bảo các khóa/chỉ mục có thể debug dễ dàng
-use crate::{Error, entity::{Entity, Query}}; // Import các định nghĩa lỗi, trait Entity và struct Query
+use crate::Error; // Import các định nghĩa lỗi
+use kernel::storage::entity::{Entity, Query}; // Import trait Entity và struct Query từ kernel
 use serde; // Import serde module
 
 /// Hợp đồng cho bất kỳ cơ chế lưu trữ nào muốn làm việc với framework.
