@@ -1,4 +1,5 @@
-use kernel::{Logger, Config};
+use kernel::logger::Logger;
+use kernel::config::Config;
 use std::time::Duration;
 
 fn main() {

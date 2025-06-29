@@ -1,4 +1,6 @@
-use kernel::{Builder, Plugin, Config};
+use kernel::builder::Builder;
+use kernel::plugin::Plugin;
+use kernel::config::Config;
 use std::sync::Arc;
 use async_trait::async_trait;
 

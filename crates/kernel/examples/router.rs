@@ -1,4 +1,5 @@
-use kernel::{Router, router::{Handler, Request, Response}};
+use kernel::router::Router;
+use kernel::{router::{Handler, Request, Response}};
 use std::sync::Arc;
 use async_trait::async_trait;
 

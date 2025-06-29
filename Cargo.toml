@@ -1,6 +1,8 @@
 [workspace]
 members = [
-    "crates/architecture",
+    "crates/architecture", 
+    #"crates/flat",
+    #"crates/flatc",
     "crates/kernel",
     "crates/knowledge",
     "crates/memories", "crates/naming",

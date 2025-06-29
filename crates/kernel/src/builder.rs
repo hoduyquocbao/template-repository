@@ -24,7 +24,9 @@
 //! }
 //! ```
 
-use crate::{Engine, Config, Plugin};
+use crate::engine::Engine;
+use crate::config::Config;
+use crate::plugin::Plugin;
 use std::sync::Arc;
 
 /// Builder cho Engine
@@ -77,7 +79,7 @@ impl Default for Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Plugin;
+    use crate::plugin::Plugin;
 
     /// Mock Plugin cho testing
     struct Mock;

@@ -1,11 +1,13 @@
-use kernel::{Engine, Plugin};
+use kernel::engine::Engine;
+use kernel::plugin::Plugin;
+use kernel::config::Config;
 use std::sync::Arc;
 
 struct Demo;
 
 #[async_trait::async_trait]
 impl Plugin for Demo {
-    async fn init(&self, _config: &kernel::Config) -> Result<(), Box<dyn std::error::Error>> {
+    async fn init(&self, _config: &Config) -> Result<(), Box<dyn std::error::Error>> {
         println!("[Demo] Plugin init");
         Ok(())
     }

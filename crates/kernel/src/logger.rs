@@ -19,7 +19,7 @@
 //! }
 //! ```
 
-use crate::Config;
+use crate::config::Config;
 
 /// Logger cho Framework
 ///

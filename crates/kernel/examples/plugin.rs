@@ -1,4 +1,6 @@
-use kernel::{Plugin, Engine, Config};
+use kernel::plugin::Plugin;
+use kernel::engine::Engine;
+use kernel::config::Config;
 use std::sync::Arc;
 use async_trait::async_trait;
 
@@ -18,7 +20,7 @@ impl Plugin for Hello {
         "hello"
     }
     fn version(&self) -> &str {
-        "1.0.0"
+        "1.0.0" 
     }
     fn description(&self) -> &str {
         "Say hello"

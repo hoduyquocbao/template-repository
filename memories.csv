@@ -1,16 +1,1 @@
 ID,Type,Context,Module,Subject,Description,Decision,Rationale,Timestamp
-"mem-001","Decision","System","All","Triết lý một từ đơn","Toàn bộ định danh phải là một từ đơn tiếng Anh","Áp dụng triệt để cho mọi module","Đảm bảo rõ ràng, thanh lịch, dễ bảo trì",2024-06-27T16:30:00Z
-"mem-002","Decision","System","All","Foundation separation","Tách foundation engine (kernel) khỏi logic nghiệp vụ","Chỉ giữ foundation ở kernel, nghiệp vụ ở knowledge","Giảm phụ thuộc, tăng tái sử dụng",2024-06-27T16:30:00Z
-"mem-003","Decision","Framework","kernel","Đổi tên core → kernel","Tránh xung đột std::core, nhấn mạnh vai trò engine","Đã refactor toàn bộ codebase","Không còn nợ kỹ thuật",2024-06-27T16:30:00Z
-"mem-004","Decision","Framework","knowledge","Facade CLI","Chỉ còn một entry point CLI duy nhất","Đã hợp nhất vào knowledge","Đơn giản hóa trải nghiệm, giảm duplication",2024-06-27T16:30:00Z
-"mem-005","Refactor","Framework","kernel","Chuẩn hóa interface","Đồng bộ hóa trait, struct, API","Đã hoàn thiện","Không còn vi phạm naming, lint, test, doc",2024-06-27T16:30:00Z
-"mem-006","Refactor","Framework","knowledge","Interaction Layer","Áp dụng pattern Interaction/Command","Đã triển khai","Structured logging, validation, audit",2024-06-27T16:30:00Z
-"mem-007","Feature","Framework","kernel","Plugin system","Hỗ trợ mở rộng động","Đã hoàn thiện","Cho phép extension không sửa code core",2024-06-27T16:30:00Z
-"mem-008","Feature","Framework","kernel","Validation","Chuẩn hóa input validation","Đã hoàn thiện","Đảm bảo an toàn dữ liệu",2024-06-27T16:30:00Z
-"mem-009","Feature","Framework","kernel","Serialization","Tuần tự hóa dữ liệu","Đã hoàn thiện","Đảm bảo export/import, backup",2024-06-27T16:30:00Z
-"mem-010","Feature","Framework","kernel","Metrics","Thu thập, export, monitoring số liệu","Đã hoàn thiện","Đảm bảo observability",2024-06-27T16:30:00Z
-"mem-011","Feature","Framework","knowledge","Handler pattern","Chuẩn hóa xử lý command","Đã hoàn thiện","Codebase rõ ràng, dễ mở rộng",2024-06-27T16:30:00Z
-"mem-012","Feature","Framework","knowledge","Validator","Kiểm tra input cho mọi command","Đã hoàn thiện","Giảm bug, tăng bảo mật",2024-06-27T16:30:00Z
-"mem-013","Feature","Framework","knowledge","Logger","Ghi log structured cho mọi thao tác","Đã hoàn thiện","Audit, debug, trace dễ dàng",2024-06-27T16:30:00Z
-"mem-014","Feature","Framework","knowledge","Serializer","Tuần tự hóa dữ liệu khi export/import","Đã hoàn thiện","Đảm bảo backup, đồng bộ",2024-06-27T16:30:00Z
-"mem-015","Feature","Framework","knowledge","Metrics","Thu thập, export, monitoring số liệu","Đã hoàn thiện","Đảm bảo observability",2024-06-27T16:30:00Z

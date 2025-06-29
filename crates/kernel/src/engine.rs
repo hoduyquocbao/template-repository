@@ -25,7 +25,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::{Config, Logger, Router, Plugin};
+use crate::config::Config;
+use crate::logger::Logger;
+use crate::router::Router;
+use crate::plugin::Plugin;
 
 /// Core Engine quản lý lifecycle và điều phối framework
 /// 

@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 use sysinfo::System;
-use crate::rules::ast::Violation as AstViolation;
+use crate::rules::ast::Violation as violation;
 
 #[derive(Debug, Default)]
 pub struct Metric {
@@ -31,7 +31,7 @@ pub fn measure<F1, F2>(
 ) -> (Metric, Vec<Detail>)
 where
     F1: FnOnce() -> Result<Vec<(Option<usize>, String, &'static str)>, String>,
-    F2: FnOnce() -> Result<Vec<AstViolation>, String>,
+    F2: FnOnce() -> Result<Vec<violation>, String>,
 {
     let mut metric = Metric::new(file);
     let mut details: Vec<Detail> = Vec::new();

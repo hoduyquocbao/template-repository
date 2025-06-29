@@ -650,12 +650,17 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
+ "csv",
  "num_cpus",
  "serde",
  "serde_json",
+ "sled",
+ "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
